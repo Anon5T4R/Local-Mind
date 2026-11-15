@@ -155,7 +155,7 @@ pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<
         let size = node_size(node);
         let card = card_rect(view, rect, *pos, (size.w, size.h));
         let is_selected = selected == Some(node.id.as_str());
-        draw_card(&painter, card, node, &layout, view, &palette, is_selected, map);
+        draw_card(&painter, card, node, view, &palette, is_selected, map);
     }
     if response.clicked()
         && let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
@@ -273,17 +273,7 @@ fn edges(
 }
 
 /// One card: background, accent bar, text, collapse badge and note dot.
-#[allow(clippy::too_many_arguments)]
-fn draw_card(
-    painter: &egui::Painter,
-    card: Rect,
-    node: &MindNode,
-    layout: &Layout,
-    view: &CanvasView,
-    palette: &Palette,
-    selected: bool,
-    map: &MindMap,
-) {
+fn draw_card(painter: &egui::Painter, card: Rect, node: &MindNode, view: &CanvasView, palette: &Palette, selected: bool, map: &MindMap) {
     let is_root = node.parent_id.is_none();
     let radius = (10.0 * view.zoom).clamp(2.0, 12.0);
     let fill = if is_root { palette.card_root } else { palette.card };
@@ -329,7 +319,6 @@ fn draw_card(
     if node.has_note() {
         painter.circle_filled(pos2(card.left() + 14.0 * view.zoom, card.bottom() - 8.0 * view.zoom), (3.0 * view.zoom).clamp(1.5, 4.0), palette.note);
     }
-    let _ = layout;
 }
 
 /// A node's own colour, when it holds a `#rrggbb` the UI can draw. Anything else falls back to the
