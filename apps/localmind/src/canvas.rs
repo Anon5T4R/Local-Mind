@@ -1,12 +1,14 @@
-//! The map canvas: where every card is drawn, and how the view moves over it.
+//! The map canvas: where every card is drawn, and how the view and the pointer act on it.
 //!
 //! Geometry comes from `localmind-layout` (the port of the original app's balanced four-way
-//! layout); this module only maps it to the screen, draws it, and turns a click into a node id.
-//! Pan, zoom and the selected card live in [`CanvasView`], which the app owns across frames.
+//! layout); this module maps it to the screen, draws it, and turns pointer input into the actions
+//! the editor applies ([`CanvasOutput`]). The cards are painted shapes rather than widgets, so the
+//! hit tests live here too - and they are unit-tested, because a click that lands on the wrong
+//! card is the kind of bug that only shows up in a hand test.
 
 use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
-use localmind_layout::{Layout, ResolvedSide, font_of, layout_tree, node_size};
-use localmind_model::{MindMap, MindNode};
+use localmind_layout::{Layout, ResolvedSide, font_of, layout_tree, node_size, width_of};
+use localmind_model::{MAX_WIDTH, MIN_WIDTH, MindMap, MindNode};
 
 /// Zoom limits, as the original app's canvas had them.
 pub const MIN_ZOOM: f32 = 0.2;
@@ -19,8 +21,13 @@ const TEXT_MIN_ZOOM: f32 = 0.35;
 const DOT_STEP: f32 = 24.0;
 /// The most dots the background draws, so a zoomed-out map does not paint a million of them.
 const DOT_LIMIT: usize = 6_000;
+/// Radius of the collapse badge, in layout units (before the zoom).
+const BADGE_RADIUS: f32 = 8.0;
+/// Side of the width handle on the selected card, in layout units (before the zoom).
+const HANDLE_SIDE: f32 = 14.0;
 
-/// The view over the map: where the canvas is panned to and how much it is zoomed.
+/// The view over the map: where the canvas is panned to, how much it is zoomed, and the width drag
+/// in progress.
 #[derive(Clone, Debug)]
 pub struct CanvasView {
     /// Offset of the layout origin from the centre of the canvas, in screen pixels.
@@ -28,11 +35,21 @@ pub struct CanvasView {
     pub zoom: f32,
     /// Set when the map changed enough that the view should be refitted (opened, new, generated).
     pub needs_fit: bool,
+    /// The width drag happening right now, if any.
+    pub resizing: Option<Resize>,
+}
+
+/// A width drag on the selected card: where it started and from which width.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Resize {
+    pub node: String,
+    pub start_pointer_x: f32,
+    pub start_width: f32,
 }
 
 impl Default for CanvasView {
     fn default() -> Self {
-        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true }
+        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true, resizing: None }
     }
 }
 
@@ -82,8 +99,23 @@ pub fn card_rect(view: &CanvasView, rect: Rect, pos: localmind_layout::Pos, size
     Rect::from_min_size(min, vec2(size.0, size.1) * view.zoom)
 }
 
-/// The card under `pointer`, if any. Cards are painted shapes rather than widgets, so the hit test
-/// lives here (and is unit-tested); the selection follows it.
+/// The collapse badge of a card: top-right corner, inside the card.
+pub fn badge_center(view: &CanvasView, card: Rect) -> Pos2 {
+    pos2(card.right() - 8.0 * view.zoom, card.top() + 8.0 * view.zoom)
+}
+
+/// Radius of the badge on screen.
+pub fn badge_radius(view: &CanvasView) -> f32 {
+    (BADGE_RADIUS * view.zoom).clamp(3.0, 9.0)
+}
+
+/// The width handle of the selected card: bottom-right corner.
+pub fn handle_rect(view: &CanvasView, card: Rect) -> Rect {
+    let side = (HANDLE_SIDE * view.zoom).clamp(6.0, 16.0);
+    Rect::from_min_max(pos2(card.right() - side, card.bottom() - side), card.max)
+}
+
+/// The card under `pointer`, if any.
 pub fn hit_test(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, pointer: Pos2) -> Option<String> {
     let hidden = map.hidden_ids();
     map.nodes
@@ -97,36 +129,109 @@ pub fn hit_test(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, p
         .map(|node| node.id.clone())
 }
 
-/// What the frame's interaction produced.#[derive(Clone, Debug)]
+/// The collapse badge under `pointer`, if any (checked before the card: it sits inside the card).
+pub fn badge_at(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, pointer: Pos2) -> Option<String> {
+    let hidden = map.hidden_ids();
+    let radius = badge_radius(view) + 2.0;
+    map.nodes
+        .iter()
+        .filter(|node| !hidden.contains(&node.id) && !map.children(&node.id).is_empty())
+        .find(|node| {
+            let Some(pos) = layout.positions.get(&node.id) else { return false };
+            let size = node_size(node);
+            let card = card_rect(view, rect, *pos, (size.w, size.h));
+            badge_center(view, card).distance(pointer) <= radius
+        })
+        .map(|node| node.id.clone())
+}
+
+/// What the frame's interaction produced. The editor applies these; the canvas never mutates the
+/// map, so an undo step is always the caller's decision.
+#[derive(Clone, Debug)]
 pub struct CanvasOutput {
-    /// A card was clicked.
+    /// The canvas rect of this frame, which the app uses for a later fit.
+    pub rect: Rect,
+    /// A card was clicked (not its badge).
     pub clicked: Option<String>,
     /// Empty canvas was clicked (the selection goes away).
     pub clicked_empty: bool,
-    /// The canvas rect of this frame, which the app uses for a later fit.
-    pub rect: Rect,
+    /// A card was double-clicked: start editing its text.
+    pub double_clicked: Option<String>,
+    /// The collapse badge of a card was clicked.
+    pub badge_clicked: Option<String>,
+    /// A card was right-clicked: open the context menu there.
+    pub context_menu: Option<(String, Pos2)>,
+    /// The width the selected card should get, while its handle is being dragged.
+    pub width: Option<(String, f32)>,
+    /// The width drag ended this frame.
+    pub width_finished: bool,
 }
 
 impl Default for CanvasOutput {
     fn default() -> Self {
-        Self { clicked: None, clicked_empty: false, rect: Rect::NOTHING }
+        Self {
+            rect: Rect::NOTHING,
+            clicked: None,
+            clicked_empty: false,
+            double_clicked: None,
+            badge_clicked: None,
+            context_menu: None,
+            width: None,
+            width_finished: false,
+        }
     }
 }
 
-/// Draws the map and handles pan, zoom and click-to-select.
-pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<&str>) -> CanvasOutput {
+/// Draws the map and turns pointer input into [`CanvasOutput`].
+pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<&str>, editing: Option<&str>) -> CanvasOutput {
     let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
     let mut out = CanvasOutput { rect, ..Default::default() };
 
     let palette = Palette::from(&ui.visuals().clone());
     ui.painter().rect_filled(rect, CornerRadius::ZERO, palette.canvas);
 
-    if response.dragged() {
-        view.pan += response.drag_delta();
+    let layout = layout_tree(&map.nodes);
+    let origin = view.origin(rect);
+    let hidden = map.hidden_ids();
+    let by_id: std::collections::HashMap<&str, &MindNode> = map.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+    let visible = |node: &&MindNode| !hidden.contains(&node.id);
+
+    interact(ui, &response, rect, map, view, &layout, selected, &mut out);
+
+    let painter = ui.painter_at(rect);
+    dots(&painter, rect, view, origin, &palette);
+    edges(&painter, map, &layout, &by_id, &hidden, view, origin, &palette);
+
+    for node in map.nodes.iter().filter(visible) {
+        let Some(pos) = layout.positions.get(&node.id) else { continue };
+        let size = node_size(node);
+        let card = card_rect(view, rect, *pos, (size.w, size.h));
+        let is_selected = selected == Some(node.id.as_str());
+        let is_editing = editing == Some(node.id.as_str());
+        draw_card(&painter, card, node, view, &palette, is_selected, map, is_editing);
     }
+
+    hover_cursor(ui, &response, map, &layout, view, rect, selected);
+    out
+}
+
+/// Zoom, pan, width drag and clicks.
+#[allow(clippy::too_many_arguments)]
+fn interact(
+    ui: &Ui,
+    response: &egui::Response,
+    rect: Rect,
+    map: &MindMap,
+    view: &mut CanvasView,
+    layout: &Layout,
+    selected: Option<&str>,
+    out: &mut CanvasOutput,
+) {
+    let pointer = ui.input(|i| i.pointer.interact_pos());
+
     if response.hovered() {
         let (scroll, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
-        if let Some(pointer) = ui.input(|i| i.pointer.hover_pos()) {
+        if let Some(pointer) = pointer {
             if scroll.abs() > 0.0 {
                 view.zoom_around((scroll * 0.0015).exp(), pointer, rect);
             }
@@ -140,33 +245,82 @@ pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<
         view.needs_fit = false;
     }
 
-    let layout = layout_tree(&map.nodes);
-    let origin = view.origin(rect);
-    let painter = ui.painter_at(rect);
-    let hidden = map.hidden_ids();
-    let by_id: std::collections::HashMap<&str, &MindNode> = map.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-
-    dots(&painter, rect, view, origin, &palette);
-    edges(&painter, map, &layout, &by_id, &hidden, view, origin, &palette);
-
-    let mut clicked_card = None;
-    for node in map.nodes.iter().filter(|n| !hidden.contains(&n.id)) {
-        let Some(pos) = layout.positions.get(&node.id) else { continue };
+    // A drag that starts on the selected card's handle resizes it; anywhere else pans the canvas.
+    // The press origin is what decides: by the time the drag is recognized the pointer has already
+    // moved off the handle.
+    if response.drag_started()
+        && let (Some(pressed_at), Some(id), Some(node)) = (ui.input(|i| i.pointer.press_origin()), selected, selected.and_then(|id| map.node(id)))
+        && let Some(pos) = layout.positions.get(id)
+    {
         let size = node_size(node);
         let card = card_rect(view, rect, *pos, (size.w, size.h));
-        let is_selected = selected == Some(node.id.as_str());
-        draw_card(&painter, card, node, view, &palette, is_selected, map);
+        if handle_rect(view, card).contains(pressed_at) {
+            view.resizing = Some(Resize { node: id.to_string(), start_pointer_x: pressed_at.x, start_width: width_of(node) });
+        }
     }
-    if response.clicked()
-        && let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
+
+    if let Some(resize) = view.resizing.clone() {
+        if response.dragged() {
+            if let Some(pointer) = pointer {
+                let width = (resize.start_width + (pointer.x - resize.start_pointer_x) / view.zoom).clamp(MIN_WIDTH, MAX_WIDTH);
+                out.width = Some((resize.node.clone(), width));
+            }
+        } else if !response.drag_started() {
+            view.resizing = None;
+            out.width_finished = true;
+        }
+    } else if response.dragged() {
+        view.pan += response.drag_delta();
+    }
+
+    let Some(pointer) = pointer else { return };
+    if response.clicked() {
+        if let Some(id) = badge_at(map, layout, view, rect, pointer) {
+            out.badge_clicked = Some(id);
+        } else if let Some(id) = hit_test(map, layout, view, rect, pointer) {
+            out.clicked = Some(id);
+        } else {
+            out.clicked_empty = true;
+        }
+    }
+    if response.double_clicked()
+        && let Some(id) = hit_test(map, layout, view, rect, pointer)
+        && badge_at(map, layout, view, rect, pointer).is_none()
     {
-        clicked_card = hit_test(map, &layout, view, rect, pointer);
+        out.double_clicked = Some(id);
     }
-    if response.clicked() && clicked_card.is_none() {
-        out.clicked_empty = true;
+    if response.secondary_clicked()
+        && let Some(id) = hit_test(map, layout, view, rect, pointer)
+    {
+        out.context_menu = Some((id, pointer));
     }
-    out.clicked = clicked_card;
-    out
+}
+
+/// The pointer says what the thing under it does: a card is clickable, the handle and the badge have
+/// their own cursor.
+fn hover_cursor(ui: &Ui, response: &egui::Response, map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, selected: Option<&str>) {
+    if !response.hovered() {
+        return;
+    }
+    let Some(pointer) = ui.input(|i| i.pointer.hover_pos()) else { return };
+    let cursor = if let Some(node) = selected.and_then(|id| map.node(id)) {
+        let card = layout.positions.get(&node.id).map(|pos| {
+            let size = node_size(node);
+            card_rect(view, rect, *pos, (size.w, size.h))
+        });
+        match card {
+            Some(card) if handle_rect(view, card).contains(pointer) => Some(egui::CursorIcon::ResizeHorizontal),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let cursor = cursor.or_else(|| badge_at(map, layout, view, rect, pointer).map(|_| egui::CursorIcon::PointingHand));
+    let cursor = cursor.or_else(|| hit_test(map, layout, view, rect, pointer).map(|_| egui::CursorIcon::PointingHand));
+    let cursor = cursor.or(Some(egui::CursorIcon::Grab));
+    if let Some(cursor) = cursor {
+        ui.ctx().set_cursor_icon(cursor);
+    }
 }
 
 /// The colours this frame draws with: the app's theme comes through `visuals`, so a light or dark
@@ -233,6 +387,7 @@ fn dots(painter: &egui::Painter, rect: Rect, view: &CanvasView, origin: Pos2, pa
 
 /// The links, drawn under the cards: a cubic curve from the parent's centre to the child's, with
 /// the control points halfway along the depth axis (what the original app drew).
+#[allow(clippy::too_many_arguments)]
 fn edges(
     painter: &egui::Painter,
     map: &MindMap,
@@ -272,8 +427,18 @@ fn edges(
     }
 }
 
-/// One card: background, accent bar, text, collapse badge and note dot.
-fn draw_card(painter: &egui::Painter, card: Rect, node: &MindNode, view: &CanvasView, palette: &Palette, selected: bool, map: &MindMap) {
+/// One card: background, accent bar, text, collapse badge, note dot and (when selected) the width
+/// handle.
+fn draw_card(
+    painter: &egui::Painter,
+    card: Rect,
+    node: &MindNode,
+    view: &CanvasView,
+    palette: &Palette,
+    selected: bool,
+    map: &MindMap,
+    editing: bool,
+) {
     let is_root = node.parent_id.is_none();
     let radius = (10.0 * view.zoom).clamp(2.0, 12.0);
     let fill = if is_root { palette.card_root } else { palette.card };
@@ -288,12 +453,17 @@ fn draw_card(painter: &egui::Painter, card: Rect, node: &MindNode, view: &Canvas
     let bar = Rect::from_min_size(card.min, vec2(bar_width, card.height()));
     painter.rect_filled(bar, CornerRadius { nw: radius as u8, sw: radius as u8, ne: 0, se: 0 }, accent);
 
-    if view.zoom >= TEXT_MIN_ZOOM {
+    // The node being edited draws no text: the text field over the card is what shows the draft.
+    if !editing && view.zoom >= TEXT_MIN_ZOOM {
         let font_size = font_of(node) * view.zoom;
         let wrap = (card.width() - 24.0 * view.zoom).max(8.0);
         let galley = painter.layout(node.text.clone(), FontId::proportional(font_size), palette.text, wrap);
         let text_pos = pos2(card.left() + 12.0 * view.zoom, card.center().y - galley.size().y / 2.0);
         painter.galley(text_pos, galley, palette.text);
+    }
+    // A card too small to show text still shows that it is being edited.
+    if editing {
+        painter.rect_stroke(card, CornerRadius::same(radius as u8), Stroke::new(1.0, palette.selection), StrokeKind::Inside);
     }
 
     // Children that are not drawn because the node is collapsed: the count, so the branch is not
@@ -301,8 +471,8 @@ fn draw_card(painter: &egui::Painter, card: Rect, node: &MindNode, view: &Canvas
     if node.collapsed == Some(true) {
         let count = map.children(&node.id).len();
         if count > 0 {
-            let at = pos2(card.right() - 8.0 * view.zoom, card.top() + 8.0 * view.zoom);
-            painter.circle_filled(at, (8.0 * view.zoom).clamp(3.0, 9.0), palette.accent);
+            let at = badge_center(view, card);
+            painter.circle_filled(at, badge_radius(view), palette.accent);
             if view.zoom >= TEXT_MIN_ZOOM {
                 painter.text(
                     at,
@@ -318,6 +488,14 @@ fn draw_card(painter: &egui::Painter, card: Rect, node: &MindNode, view: &Canvas
     // A node with a note says so; the note itself is edited from the card's menu.
     if node.has_note() {
         painter.circle_filled(pos2(card.left() + 14.0 * view.zoom, card.bottom() - 8.0 * view.zoom), (3.0 * view.zoom).clamp(1.5, 4.0), palette.note);
+    }
+
+    // The width handle lives on the selected card only: it is the one that can be resized.
+    if selected {
+        let handle = handle_rect(view, card);
+        let r = (handle.width() / 2.0).max(2.0);
+        painter.circle_filled(handle.center(), r, palette.selection);
+        painter.circle_filled(handle.center(), r * 0.45, palette.canvas);
     }
 }
 
@@ -336,6 +514,7 @@ fn node_color(node: &MindNode) -> Option<Color32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use localmind_layout::{NODE_H, NODE_W};
     use localmind_model::MindMap;
 
     fn rect() -> Rect {
@@ -442,7 +621,7 @@ mod tests {
     fn the_hit_test_follows_pan_and_zoom() {
         let map = MindMap::new("t", "central");
         let root = map.root_id().map(str::to_string).unwrap_or_default();
-        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false };
+        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false, resizing: None };
         let layout = layout_tree(&map.nodes);
         let canvas = rect();
         let node = map.node(&root).expect("root");
@@ -451,5 +630,42 @@ mod tests {
         assert_eq!(hit_test(&map, &layout, &view, canvas, card.center()).as_deref(), Some(root.as_str()));
         // Just outside the same card there is nothing to hit.
         assert_eq!(hit_test(&map, &layout, &view, canvas, card.right_center() + vec2(4.0, 0.0)), None);
+    }
+
+    /// The badge sits inside the card and wins over it: clicking it collapses, it does not select.
+    #[test]
+    fn the_badge_is_hit_before_the_card_body() {
+        let mut map = MindMap::new("t", "central");
+        let root = map.root_id().map(str::to_string).unwrap_or_default();
+        map.add_child(&root, "ramo", None);
+        map.toggle_collapse(&root);
+        let layout = layout_tree(&map.nodes);
+        let view = CanvasView::default();
+        let canvas = rect();
+        let node = map.node(&root).expect("root");
+        let size = node_size(node);
+        let card = card_rect(&view, canvas, *layout.positions.get(&root).expect("placed"), (size.w, size.h));
+        assert_eq!(badge_at(&map, &layout, &view, canvas, badge_center(&view, card)).as_deref(), Some(root.as_str()));
+
+        // A leaf has no badge, even at the same corner (its root stays expanded here).
+        let mut leaf_map = MindMap::new("t", "central");
+        let leaf_root = leaf_map.root_id().map(str::to_string).unwrap_or_default();
+        let leaf = leaf_map.add_child(&leaf_root, "folha", None);
+        let leaf_layout = layout_tree(&leaf_map.nodes);
+        let leaf_node = leaf_map.node(&leaf).expect("leaf");
+        let leaf_size = node_size(leaf_node);
+        let leaf_card = card_rect(&view, canvas, *leaf_layout.positions.get(&leaf).expect("placed"), (leaf_size.w, leaf_size.h));
+        assert_eq!(badge_at(&leaf_map, &leaf_layout, &view, canvas, badge_center(&view, leaf_card)), None);
+    }
+
+    /// The handle is the bottom-right corner of the selected card only.
+    #[test]
+    fn the_width_handle_is_at_the_corner_of_the_card() {
+        let view = CanvasView::default();
+        let card = Rect::from_min_size(pos2(100.0, 100.0), vec2(NODE_W, NODE_H));
+        let handle = handle_rect(&view, card);
+        assert!(card.contains_rect(handle));
+        assert_eq!(handle.max, card.max);
+        assert!(!handle.contains(card.center()));
     }
 }

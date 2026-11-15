@@ -18,6 +18,14 @@
 	Save	保存
 	Save As.	名前を付けて保存。
 	Quit Local Mind	Local Mind を終了
+	Edit	編集
+	Undo	元に戻す
+	Redo	やり直す
+	Edit text	テキストを編集
+	New child	子ノードを追加
+	New sibling	兄弟ノードを追加
+	Delete node	ノードを削除
+	New node	新しいノード
 	View	表示
 	Fit to window	ウィンドウに合わせる
 	Zoom in	拡大
@@ -27,6 +35,23 @@
 	About Local Mind	Local Mind について
 	An untitled map	無題のマップ
 	Central idea	中心のアイデア
+	Expand branch	ブランチを展開
+	Collapse branch	ブランチを折りたたむ
+	Note…	ノート…
+	Note	ノート
+	Remove note	ノートを削除
+	Side	側
+	Left	左
+	Right	右
+	Up	上
+	Down	下
+	Automatic	自動
+	Text size	文字サイズ
+	Reset width	幅をリセット
+	Colour	色
+	None	なし
+	No colour	色なし
+	Cancel	キャンセル
 	Dismiss	閉じる
 	Nothing open.	何も開いていません。
 	Open a mind map.	マインドマップを開く。

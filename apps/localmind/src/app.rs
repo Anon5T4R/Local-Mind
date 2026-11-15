@@ -1,15 +1,15 @@
-//! The window: the menu bar, the toolbar strip, the map canvas, and the About window that fronts
-//! the update check.
+//! The window: the menu bar, the toolbar strip, the map area (an [`Editor`]) and the About window
+//! that fronts the update check.
 //!
-//! The frame (title bar, menu strip, update prompt, file pickers) is the one the suite shares;
-//! the app's own work is [`LocalApp::page`] (the mind map) and the file commands behind the menus.
+//! The frame (title bar, menu strip, update prompt, file pickers) is the one the suite shares; the
+//! map itself, its editing state and its keyboard live in [`crate::edit`].
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use craft_update::updater::{Action, Status, Updater};
 
-use crate::canvas::{self, CanvasView};
 use crate::doc::Document;
+use crate::edit::{self, Editor};
 use crate::i18n;
 use crate::pickers::{Picked, Pickers};
 use crate::prefs::Prefs;
@@ -36,14 +36,10 @@ pub struct LocalApp {
     about_open: bool,
     /// The settings the app remembers between runs (the interface language).
     prefs: Prefs,
-    doc: Document,
-    view: CanvasView,
-    selected: Option<String>,
+    editor: Editor,
     pending: Option<Pending>,
     /// The last failure, shown until dismissed: a map that could not be read must say so.
     error: Option<String>,
-    /// The canvas rect of the last frame, for the zoom buttons and Fit.
-    canvas_rect: egui::Rect,
     /// The title currently on the window, so it is only sent when it changes.
     window_title: String,
 }
@@ -60,15 +56,11 @@ impl LocalApp {
             frame,
             about_open: false,
             prefs,
-            doc: Document::untitled(tl!("An untitled map"), tl!("Central idea")),
-            view: CanvasView::default(),
-            selected: None,
+            editor: Editor::new(edit::new_document()),
             pending: None,
             error: None,
-            canvas_rect: egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1.0, 1.0)),
             window_title: String::new(),
         };
-        app.selected = app.doc.root_id();
         if let Some(path) = initial {
             app.open_path(path);
         }
@@ -103,17 +95,60 @@ impl LocalApp {
                     ui.close();
                 }
             });
+            ui.menu_button(tl!("Edit"), |ui| {
+                if ui.add_enabled(self.editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
+                    self.editor.undo();
+                    ui.close();
+                }
+                if ui.add_enabled(self.editor.can_redo(), egui::Button::new(tl!("Redo"))).clicked() {
+                    self.editor.redo();
+                    ui.close();
+                }
+                ui.separator();
+                let selected = self.editor.selected.clone();
+                let has_selection = selected.is_some();
+                if ui.add_enabled(has_selection, egui::Button::new(tl!("Edit text"))).clicked() {
+                    if let Some(id) = &selected {
+                        self.editor.begin_edit(id);
+                    }
+                    ui.close();
+                }
+                if ui.add_enabled(has_selection, egui::Button::new(tl!("New child"))).clicked() {
+                    if let Some(id) = &selected {
+                        self.editor.add_child(id);
+                    }
+                    ui.close();
+                }
+                if ui.add_enabled(has_selection, egui::Button::new(tl!("New sibling"))).clicked() {
+                    if let Some(id) = &selected {
+                        self.editor.add_sibling(id);
+                    }
+                    ui.close();
+                }
+                if ui.add_enabled(has_selection, egui::Button::new(tl!("Note…"))).clicked() {
+                    if let Some(id) = &selected {
+                        self.editor.open_note(id);
+                    }
+                    ui.close();
+                }
+                if ui.add_enabled(has_selection, egui::Button::new(tl!("Delete node"))).clicked() {
+                    if let Some(id) = &selected {
+                        self.editor.delete(id);
+                    }
+                    ui.close();
+                }
+            });
             ui.menu_button(tl!("View"), |ui| {
                 if ui.button(tl!("Fit to window")).clicked() {
-                    self.view.needs_fit = true;
+                    self.editor.fit();
                     ui.close();
                 }
                 if ui.button(tl!("Zoom in")).clicked() {
-                    self.zoom_step(1.2);
+                    self.editor.zoom_step(1.2);
                     ui.close();
                 }
                 if ui.button(tl!("Zoom out")).clicked() {
-                    self.zoom_step(1.0 / 1.2);
+                    self.editor.zoom_step(1.0 / 1.2);
                     ui.close();
                 }
             });
@@ -149,21 +184,41 @@ impl LocalApp {
             self.ask_save_as(ui.ctx());
         }
         ui.separator();
-        let label = self.doc.file_label(tl!("An untitled map"));
-        let dirty = if self.doc.dirty { " *" } else { "" };
+        if ui.add_enabled(self.editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
+            self.editor.undo();
+        }
+        if ui.add_enabled(self.editor.can_redo(), egui::Button::new(tl!("Redo"))).clicked() {
+            self.editor.redo();
+        }
+        ui.separator();
+        let selected = self.editor.selected.clone();
+        if ui.add_enabled(selected.is_some(), egui::Button::new(tl!("New child"))).clicked()
+            && let Some(id) = &selected
+        {
+            self.editor.add_child(id);
+        }
+        if ui.add_enabled(selected.is_some(), egui::Button::new(tl!("Delete node"))).clicked()
+            && let Some(id) = &selected
+        {
+            self.editor.delete(id);
+        }
+        ui.separator();
+
+        let label = self.editor.doc.file_label(tl!("An untitled map"));
+        let dirty = if self.editor.doc.dirty { " *" } else { "" };
         ui.label(format!("{label}{dirty}"))
-            .on_hover_text(self.doc.path.as_ref().map_or_else(|| tl!("An untitled map").to_string(), |p| p.display().to_string()));
+            .on_hover_text(self.editor.doc.path.as_ref().map_or_else(|| tl!("An untitled map").to_string(), |p| p.display().to_string()));
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button(tl!("Fit to window")).clicked() {
-                self.view.needs_fit = true;
+                self.editor.fit();
             }
             if ui.button("+").on_hover_text(tl!("Zoom in")).clicked() {
-                self.zoom_step(1.2);
+                self.editor.zoom_step(1.2);
             }
-            ui.label(format!("{:.0}%", self.view.zoom * 100.0));
+            ui.label(format!("{:.0}%", self.editor.view.zoom * 100.0));
             if ui.button("-").on_hover_text(tl!("Zoom out")).clicked() {
-                self.zoom_step(1.0 / 1.2);
+                self.editor.zoom_step(1.0 / 1.2);
             }
         });
     }
@@ -185,7 +240,7 @@ impl LocalApp {
             ui.separator();
         }
 
-        if self.doc.map.root().is_none() {
+        if self.editor.doc.map.root().is_none() {
             ui.label(tl!("Nothing open."));
             ui.add_space(6.0);
             if ui.button(tl!("Open.")).clicked() {
@@ -194,23 +249,11 @@ impl LocalApp {
             return;
         }
 
-        let out = canvas::show(ui, &self.doc.map, &mut self.view, self.selected.as_deref());
-        self.canvas_rect = out.rect;
-        if let Some(id) = out.clicked {
-            self.selected = Some(id);
-        } else if out.clicked_empty {
-            self.selected = None;
-        }
-    }
-
-    fn zoom_step(&mut self, factor: f32) {
-        self.view.zoom_around(factor, self.canvas_rect.center(), self.canvas_rect);
+        self.editor.ui(ui);
     }
 
     fn new_map(&mut self) {
-        self.doc = Document::untitled(tl!("An untitled map"), tl!("Central idea"));
-        self.selected = self.doc.root_id();
-        self.view = CanvasView::default();
+        self.editor.replace(edit::new_document());
         self.pending = None;
         self.error = None;
     }
@@ -224,7 +267,7 @@ impl LocalApp {
     }
 
     fn ask_save_as(&mut self, ctx: &egui::Context) {
-        let name = localmind_io::suggested_name(&self.doc.map.title);
+        let name = localmind_io::suggested_name(&self.editor.doc.map.title);
         self.pending = Some(Pending::SaveAs);
         if !self.pickers.ask_save_file(ctx, tl!("Save the mind map"), &name, Some((tl!("Mind map"), MAP_EXTENSIONS))) {
             log::debug!("a file picker is already open");
@@ -234,15 +277,18 @@ impl LocalApp {
 
     /// Save, asking for a path the first time.
     fn save(&mut self, ctx: &egui::Context) {
-        match self.doc.path.clone() {
+        match self.editor.doc.path.clone() {
             Some(path) => self.save_to(&path),
             None => self.ask_save_as(ctx),
         }
     }
 
-    fn save_to(&mut self, path: &std::path::Path) {
-        match self.doc.save(path) {
-            Ok(()) => self.error = None,
+    fn save_to(&mut self, path: &Path) {
+        match self.editor.doc.save(path) {
+            Ok(()) => {
+                self.editor.mark_saved();
+                self.error = None;
+            }
             Err(e) => self.error = Some(i18n::tr_fmt("the map could not be saved: {error}", &[("error", &e.to_string())])),
         }
     }
@@ -250,9 +296,7 @@ impl LocalApp {
     fn open_path(&mut self, path: PathBuf) {
         match Document::open(&path) {
             Ok(doc) => {
-                self.doc = doc;
-                self.selected = self.doc.root_id();
-                self.view = CanvasView::default();
+                self.editor.replace(doc);
                 self.error = None;
             }
             Err(e) => self.error = Some(i18n::tr_fmt("the map could not be opened: {error}", &[("error", &e.to_string())])),
@@ -261,8 +305,8 @@ impl LocalApp {
 
     /// The window title says which map this is and whether it has unsaved edits.
     fn sync_window_title(&mut self, ctx: &egui::Context) {
-        let label = self.doc.file_label(tl!("An untitled map"));
-        let dirty = if self.doc.dirty { "*" } else { "" };
+        let label = self.editor.doc.file_label(tl!("An untitled map"));
+        let dirty = if self.editor.doc.dirty { "*" } else { "" };
         let title = format!("{} — {label}{dirty}", APP.name);
         if title != self.window_title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -270,7 +314,7 @@ impl LocalApp {
         }
     }
 
-    /// The keyboard: the file commands, and nothing the canvas needs.
+    /// The file commands. The map's own keys (arrows, Tab, Enter, undo) are the editor's.
     fn shortcuts(&mut self, ctx: &egui::Context) {
         let (new, open, save, save_as) = ctx.input(|i| {
             let command = i.modifiers.command;
@@ -380,7 +424,7 @@ impl LocalApp {
 }
 
 impl eframe::App for LocalApp {
-    /// Work that is not drawing: the update check, the pickers' answers and the keyboard.
+    /// Work that is not drawing: the update check, the pickers' answers and the window commands.
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.updater.check_at_start(ctx);
         self.updater.tick(ctx);

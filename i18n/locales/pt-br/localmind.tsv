@@ -18,6 +18,14 @@
 	Save	Salvar
 	Save As.	Salvar como.
 	Quit Local Mind	Sair do Local Mind
+	Edit	Editar
+	Undo	Desfazer
+	Redo	Refazer
+	Edit text	Editar texto
+	New child	Novo filho
+	New sibling	Novo irmão
+	Delete node	Excluir nó
+	New node	Novo nó
 	View	Exibir
 	Fit to window	Ajustar à janela
 	Zoom in	Aumentar zoom
@@ -27,6 +35,23 @@
 	About Local Mind	Sobre o Local Mind
 	An untitled map	Mapa sem título
 	Central idea	Ideia central
+	Expand branch	Expandir ramo
+	Collapse branch	Recolher ramo
+	Note…	Nota…
+	Note	Nota
+	Remove note	Remover nota
+	Side	Lado
+	Left	Esquerda
+	Right	Direita
+	Up	Cima
+	Down	Baixo
+	Automatic	Automático
+	Text size	Tamanho do texto
+	Reset width	Largura padrão
+	Colour	Cor
+	None	Nenhuma
+	No colour	Sem cor
+	Cancel	Cancelar
 	Dismiss	Dispensar
 	Nothing open.	Nada aberto.
 	Open a mind map.	Abrir um mapa mental.

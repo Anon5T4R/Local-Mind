@@ -13,6 +13,7 @@
 mod app;
 mod canvas;
 mod doc;
+mod edit;
 mod fonts;
 mod i18n;
 mod pickers;

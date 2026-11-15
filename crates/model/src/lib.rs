@@ -458,6 +458,11 @@ impl History {
         self.past.clear();
         self.future.clear();
     }
+
+    /// How many undo steps are stored (the tests check that one drag is one step).
+    pub fn steps(&self) -> usize {
+        self.past.len()
+    }
 }
 
 /// A fresh node/map id: eight characters of `[0-9a-z]`, the shape the original app's `nanoid(8)`
