@@ -14,7 +14,10 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
   `libs/` (vendored). Dep nova também precisa ser pure Rust (sem C).
 - **egui/winit/craft-libs do fork vendored**, nunca do crates.io; nunca `lab-ui`.
 - **craft-update tem fonte única** (`Anon5T4R/local-libs`): a cópia em `libs/craft-libs/crates/update`
-  é espelho — mudança se faz na fonte e replica com `scripts/sync.ps1 -Mode push`.
+  é espelho — mudança se faz na fonte e replica com `scripts/sync.ps1 -Mode push`. **Toda** mudança na
+  fonte passa `rustfmt --edition 2024` na raiz do `local-libs` antes do commit (a config
+  `max_width=150`/`use_small_heuristics="Max"` está lá); sem isso o rustfmt do CI reformata o crate
+  inteiro no estilo errado e o estrago se replica aos 13 apps.
 - **Never-crash:** nada de `unwrap`/`expect`/`panic!`/`unreachable!`/`todo!` fora de testes (o clippy
   barra), `unsafe` proibido. Toda entrada (caminho, arquivo, argumento) é hostil até prova em
   contrário.
