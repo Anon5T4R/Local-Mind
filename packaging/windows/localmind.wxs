@@ -185,8 +185,9 @@
         <RegistryValue Root="HKLM" Key="Software\Anon5T4R\LocalMind" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
 
         <!-- .tmind: the map format the original LocalMind wrote; this app is its default handler, so
-             a double click on a user's existing map opens here. -->
-        <ProgId Id="LocalMind.Document" Description="Local Mind Map" Icon="LocalMindIcon.ico" IconIndex="0">
+             a double click on a user's existing map opens here. `Icon` on a ProgId names a File (the
+             executable carries the icon), never the Icon table. -->
+        <ProgId Id="LocalMind.Document" Description="Local Mind Map" Icon="LocalMindExe" IconIndex="0">
           <Extension Id="tmind" ContentType="application/x-localmind">
             <Verb Id="open" Command="Open" TargetFile="LocalMindExe" Argument="&quot;%1&quot;" />
           </Extension>
