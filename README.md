@@ -15,6 +15,10 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 - **Seis temas nomeados** (o escuro padrão, Natureza, Azul escuro, Verde calmo, Rosa pastel e
   PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o canvas e o minimapa
   mudam juntos, e a escolha fica salva.
+- **IA com a sua chave** (menu **AI**): conexões com preset de provedor e chave no keychain do
+  sistema; gerar mapa de um tema ou de um texto, expandir, expandir fundo, explicar, reescrever com
+  instrução, e um chat com streaming que insere a resposta como nó ou ramo. Sem motor local: os
+  modelos são os do provedor que você configurar.
 - **Minimapa** no canto inferior direito, com o viewport marcado e clique/arrasto para navegar.
 - **Export** em Markdown, HTML, SVG e PNG (View/Arquivo → Exportar). O HTML leva as cores do tema;
   o PNG é o mesmo desenho da tela em 2×.
@@ -35,8 +39,9 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 ## O que ainda vem
 
-A fase de IA (remota, por chave própria) está no `UPSTREAM-SYNC.md` com o estado. O que esta versão
-**não** faz: conversar com a IA e a Ajuda da suíte.
+A paridade final (tabela, Ajuda, docs) fecha na v1.0.0 — ver `UPSTREAM-SYNC.md`. No backlog do app:
+mover/realocar filhos por arrasto (Ctrl+arrasto, com diálogo de "novo pai" como plano B) e um tema
+claro no padrão craft, além dos seis herdados.
 
 ## Formato
 

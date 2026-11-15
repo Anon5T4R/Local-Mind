@@ -80,3 +80,41 @@
 	SVG	SVG
 	PNG	PNG
 	Export the map	Exportar o mapa
+	AI	IA
+	Generate map…	Gerar mapa…
+	Expand	Expandir
+	Expand deep	Expandir fundo
+	Explain	Explicar
+	Rewrite…	Reescrever…
+	Chat	Chat
+	Connections…	Conexões…
+	AI connections	Conexões de IA
+	The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something.	A chave fica no keychain do sistema operacional. O mapa só sai deste computador quando você pergunta algo ao modelo.
+	key saved	chave salva
+	Remove	Remover
+	Add connection	Adicionar conexão
+	Provider	Provedor
+	Base URL	URL base
+	Model	Modelo
+	Fetch models	Buscar modelos
+	API key	Chave de API
+	Save key	Salvar chave
+	Generate	Gerar
+	Generate map	Gerar mapa
+	A topic, or a whole text to organize.	Um tema, ou um texto inteiro para organizar.
+	Depth	Profundidade
+	Breadth	Amplitude
+	Rewrite	Reescrever
+	Apply	Aplicar
+	shorter	mais curto
+	more technical	mais técnico
+	as a question	como pergunta
+	fix the wording	corrigir a redação
+	Stop	Parar
+	Send	Enviar
+	You	Você
+	Message the AI…	Mensagem para a IA…
+	Clear conversation	Limpar conversa
+	As a node	Como nó
+	As a branch	Como ramo
+	No AI connection yet. Open AI > Connections… and add one.	Nenhuma conexão de IA ainda. Abra IA > Conexões… e adicione uma.

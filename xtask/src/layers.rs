@@ -50,6 +50,9 @@ pub const TABLE: &[(&str, Class)] = &[
     ("layout", Class::Layer(2)),
     // Reading and writing the user's .tmind files, atomically.
     ("io", Class::Layer(2)),
+    // The remote AI: prompts, the tolerant JSON extractor, the actions and the chat. Sits above the
+    // model (it builds nodes) and reaches the network only through the shared `local-ai` client.
+    ("ai", Class::Layer(3)),
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).

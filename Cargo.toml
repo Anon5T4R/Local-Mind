@@ -22,9 +22,15 @@ craft-update = { version = "=0.1.0", path = "libs/craft-libs/crates/update/", fe
 craft-window = { path = "libs/craft-libs/crates/window/", features = ["egui"] }
 
 # the app's own layers (crates/localmind-*)
+localmind-ai = { path = "crates/ai" }
 localmind-io = { path = "crates/io" }
 localmind-layout = { path = "crates/layout" }
 localmind-model = { path = "crates/model" }
+
+# BYOK AI shared by the suite: the user's own key, one OpenAI-compatible client for every provider.
+# The copy under `libs/local-ai` is a mirror of `Anon5T4R/local-ai` (same bytes as the siblings
+# vendor); the crate's TLS is the suite's `rustls-rustcrypto` fork, wired by `[patch.crates-io]`.
+local-ai = { path = "libs/local-ai" }
 
 # foundation
 log = "0.4"

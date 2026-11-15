@@ -21,13 +21,13 @@ virou a suíte deste app em `crates/localmind-*`.
 | F1 (v0.1.0) | nascimento, modelo, layout, `.tmind` (abrir/salvar/salvar como), canvas com pan/zoom/fit/seleção, associação de arquivo, i18n, ícone | **concluída e publicada** (8 assets assinados) |
 | F2 (v0.2.0) | edição: texto inline (guarda de IME), filho/irmão, excluir, colapsar, desfazer/refazer, indentar/desindentar/mover, menu de contexto, largura por arrasto, nota editável | **concluída e publicada** (16 testes de UI no kittest) |
 | F3 (v0.3.0) | estilos por nó (cor/tinta, fonte, lado), 6 temas nomeados, minimapa, export Markdown/HTML/SVG/PNG | **concluída e publicada** |
-| F4 | IA remota (BYOK via `local-ai`): gerar mapa, expandir, expandir fundo, explicar, reescrever, chat | pendente |
+| F4 (v0.4.0) | IA remota (BYOK via `local-ai`): conexões com chave no keychain, 5 ações, chat com streaming, cancelar/erros | **concluída e publicada** |
 | F5 (v1.0.0) | paridade e polimento: tabela final, fixture de `.tmind` real, Ajuda, docs | pendente |
 
 ## Divergências declaradas (não são acidente)
 
 - **IA sem motor local GGUF.** O app antigo carrega `.gguf` com `node-llama-cpp` (llama.cpp é C/C++).
-  A suíte é Rust puro, sem dep C: a fase de IA fala só com provedores remotos, pela crate `local-ai`
+  A suíte é Rust puro, sem dep C: a IA fala só com provedores remotos, pela crate `local-ai`
   (OpenAI-compatible: Gemini, OpenAI, Groq, OpenRouter, OpenCode, custom). Chave no keychain do SO,
   como nos outros apps. Caminho futuro, se fizer falta IA offline: um processo externo
   (`llama-server`) ou um binding puro — nenhum dos dois entra sem decisão explícita.
@@ -40,6 +40,8 @@ virou a suíte deste app em `crates/localmind-*`.
 - **Temas:** o antigo tem 6 temas por variáveis CSS; aqui as **paletas são as mesmas** (`--bg`, `--panel`, `--accent`, `--canvas-dots`, `--minimap-*` viram os campos de `theme::Colors`) e mudam a janela inteira, o canvas e o minimapa. Diferente do antigo: a escolha fica no `prefs.json` e no menu **View → Theme** (o antigo escondia nas Configurações).
 - **Export:** Markdown, HTML, **SVG** e **PNG**. O SVG é acréscimo nosso (vetor, sem rasterizador). O PNG é renderizado pelo **mesmo desenho da tela** (contexto egui off-screen → malhas do epaint → preenchimento em software aqui, com o atlas de fonte), em 2× e comprimido com `miniz_oxide` (Rust puro, já no grafo via `zip`/`flate2`; compressão com nível 6, ~65 KB para um mapa típico). Não há lib de rasterização envolvida.
 - **Minimapa** no canto inferior direito: o mapa inteiro, o retângulo do viewport e clique/arrasto que move a vista (o antigo tinha o mesmo, do ReactFlow).
+- **IA remota com a chave do usuário**: conexões (preset de provedor + base URL + modelo + chave no keychain), **5 ações** (gerar mapa com profundidade/amplitude, expandir, expandir fundo, explicar, reescrever com instrução) e **chat** com streaming, "como nó"/"como ramo" e limpar. O cliente é o `local-ai` compartilhado (`chat_stream`/SSE), o parser é o extrator tolerante do app antigo (blocos de raciocínio, cercas, prosa, vírgula final). **Sem motor local GGUF** (llama.cpp é C/C++): limitação declarada.
+- **Cancelar** para a exibição e descarta a resposta; não aborta o HTTP (o cliente compartilhado lê o stream até o fim) — limitação declarada, com o hook de aborto como follow-up na fonte.
 - **Single-instance** não foi trazido: hoje cada arquivo aberto pela associação abre uma janela
   própria. O antigo reaproveitava a janela existente (`second-instance`); entra se incomodar.
 

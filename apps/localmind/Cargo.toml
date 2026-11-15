@@ -28,9 +28,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # the app's own layers (crates/localmind-*)
+localmind-ai = { workspace = true }
 localmind-io = { workspace = true }
 localmind-layout = { workspace = true }
 localmind-model = { workspace = true }
+# The BYOK client types the connection dialog and the chat speak (`Connection`, `Msg`, `PROVIDERS`).
+local-ai = { workspace = true }
 
 [dev-dependencies]
 # Headless UI tests of the canvas (egui_kittest): the map renders and answers a real click.

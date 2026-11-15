@@ -32,6 +32,7 @@ pub struct Editor {
     pub doc: Document,
     pub view: CanvasView,
     pub theme: Theme,
+    pub ai: crate::ai::Ai,
     pub selected: Option<String>,
     pub editing: Option<Editing>,
     pub menu: Option<MenuState>,
@@ -73,6 +74,7 @@ impl Editor {
             doc,
             view: CanvasView::default(),
             theme: Theme::default(),
+            ai: crate::ai::Ai::default(),
             selected,
             editing: None,
             menu: None,
@@ -393,8 +395,10 @@ impl Editor {
 
     // ---- the frame ---------------------------------------------------------------------------
 
-    /// The map area: canvas, inline field, keyboard, card menu and note window.
+    /// The map area: canvas, inline field, keyboard, card menu, note window, and the AI surface.
     pub fn ui(&mut self, ui: &mut Ui) {
+        // The chat takes width from the map area, so it goes first.
+        crate::ai::chat_panel(ui, self);
         // Read before any widget runs: the text field consumes the keys it uses, Enter included,
         // and the commit has to see the Enter of the frame it happened in.
         let keys = KeysThisFrame::read(ui.ctx());
@@ -410,6 +414,10 @@ impl Editor {
         }
         self.card_menu(ui.ctx());
         self.note_window(ui.ctx());
+        // The AI polls its worker, then draws its strip and dialogs over the map.
+        self.ai_tick();
+        self.ai_tick_models();
+        crate::ai::ui(ui, self);
     }
 
     fn apply(&mut self, out: canvas::CanvasOutput) {
@@ -798,6 +806,55 @@ impl ExportKind {
             ExportKind::Svg => "SVG",
             ExportKind::Png => "PNG",
         }
+    }
+}
+
+impl Editor {
+    /// Replaces the whole map with an AI answer (one undo step).
+    pub(crate) fn replace_map(&mut self, title: String, nodes: Vec<localmind_model::MindNode>) {
+        let before = self.doc.map.clone();
+        let now = localmind_model::now_ms();
+        self.doc.map =
+            localmind_model::MindMap { id: localmind_model::new_id(), title, nodes, created_at: now, updated_at: now, extra: Default::default() };
+        self.history.record(before);
+        self.doc.dirty = true;
+        self.selected = self.doc.root_id();
+        self.view.needs_fit = true;
+        self.editing = None;
+    }
+
+    /// Adds nodes under `parent` (one undo step).
+    pub(crate) fn add_ai_nodes(&mut self, parent: &str, nodes: Vec<localmind_model::MindNode>) {
+        let parent = parent.to_string();
+        let inserted = nodes.first().map(|node| node.id.clone());
+        if self.edit(|map| {
+            map.add_nodes(nodes.clone(), Some(&parent));
+            true
+        }) && let Some(id) = inserted
+        {
+            self.selected = Some(id);
+        }
+    }
+
+    /// Adds one child with a text (the explanation), one undo step.
+    pub(crate) fn add_ai_child(&mut self, parent: &str, text: &str) {
+        let mut created = None;
+        let parent_owned = parent.to_string();
+        let text = text.to_string();
+        if self.edit(|map| {
+            created = Some(map.add_child(&parent_owned, text.clone(), None));
+            true
+        }) && let Some(id) = created
+        {
+            self.selected = Some(id);
+        }
+    }
+
+    /// Rewrites one node's text (one undo step).
+    pub(crate) fn apply_ai_text(&mut self, node: &str, text: &str) {
+        let node = node.to_string();
+        let text = text.to_string();
+        self.edit(|map| map.set_text(&node, &text));
     }
 }
 

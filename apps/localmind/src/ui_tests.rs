@@ -17,6 +17,10 @@ fn editor() -> Editor {
 }
 
 fn harness() -> Harness<'static, Editor> {
+    harness_with(editor())
+}
+
+fn harness_with(editor: Editor) -> Harness<'static, Editor> {
     Harness::builder()
         .with_size(egui::vec2(1100.0, 760.0))
         // The default step is a quarter of a second, which is longer than egui's double-click
@@ -24,15 +28,67 @@ fn harness() -> Harness<'static, Editor> {
         .with_step_dt(1.0 / 60.0)
         .build_ui_state(
             |ui, editor: &mut Editor| {
-                // The same Edit/View menus the window uses (they live in the editor).
+                // The same menus the window uses (they live in the editor).
                 egui::MenuBar::new().ui(ui, |ui| {
                     let _ = edit::menus(ui, editor);
+                    crate::ai::menu(ui, editor);
                 });
                 editor.theme.apply(ui.ctx());
                 editor.ui(ui);
             },
-            editor(),
+            editor,
         )
+}
+
+/// A backend that answers from a canned string, with no network at all.
+struct MockAi {
+    answer: Result<String, String>,
+}
+
+impl localmind_ai::Backend for MockAi {
+    fn stream(&self, _connection: &local_ai::Connection, _history: &[local_ai::Msg], on_delta: &mut dyn FnMut(&str)) -> Result<String, String> {
+        match &self.answer {
+            Ok(answer) => {
+                // Two deltas, so the streaming path (accumulating partial text) is exercised.
+                let (head, tail) = answer.split_at(answer.len() / 2);
+                on_delta(head);
+                on_delta(tail);
+                Ok(answer.clone())
+            }
+            Err(reason) => Err(reason.clone()),
+        }
+    }
+
+    fn models(&self, _connection: &local_ai::Connection) -> Result<Vec<String>, String> {
+        Ok(vec!["mock-model".to_string()])
+    }
+}
+
+/// An editor with a mock model and one saved connection, so the AI actions run without a network.
+fn ai_editor(answer: Result<&str, &str>) -> Editor {
+    let mut editor = editor();
+    editor.ai.backend = std::sync::Arc::new(MockAi { answer: answer.map(str::to_string).map_err(str::to_string) });
+    editor.ai.connections = vec![local_ai::Connection {
+        id: "test".into(),
+        provider: "custom".into(),
+        label: "Test".into(),
+        base_url: "http://example.invalid/v1".into(),
+        model: "mock-model".into(),
+    }];
+    editor.ai.active = Some("test".into());
+    editor
+}
+
+/// Runs frames (with a little wall time) until `done` holds: the AI answers on a worker thread.
+fn wait_for(harness: &mut Harness<'_, Editor>, done: impl Fn(&Editor) -> bool) {
+    for _ in 0..400 {
+        if done(harness.state()) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        harness.run_steps(1);
+    }
+    panic!("the AI worker did not finish in time");
 }
 
 fn push(harness: &mut Harness<'_, Editor>, event: egui::Event) {
@@ -132,7 +188,6 @@ fn shot(harness: &mut Harness<'_, Editor>, name: &str) {
 fn node_text(editor: &Editor, id: &str) -> Option<String> {
     editor.doc.map.node(id).map(|n| n.text.clone())
 }
-
 #[test]
 fn tab_creates_a_child_and_typing_then_enter_commits_it() {
     let mut harness = harness();
@@ -157,7 +212,6 @@ fn tab_creates_a_child_and_typing_then_enter_commits_it() {
     assert!(harness.state().doc.dirty, "the map has unsaved changes");
     assert!(harness.state().can_undo());
 }
-
 #[test]
 fn a_double_click_opens_the_text_and_escape_keeps_the_old_one() {
     let mut harness = harness();
@@ -172,7 +226,6 @@ fn a_double_click_opens_the_text_and_escape_keeps_the_old_one() {
     assert!(harness.state().editing.is_none());
     assert_eq!(node_text(harness.state(), "h3m0d1n4").as_deref(), Some("Reconhecimento"), "Escape throws the draft away");
 }
-
 #[test]
 fn enter_creates_a_sibling_of_the_selected_node() {
     let mut harness = harness();
@@ -183,7 +236,6 @@ fn enter_creates_a_sibling_of_the_selected_node() {
     let created = harness.state().editing.as_ref().map(|e| e.node.clone()).expect("the sibling opens for typing");
     assert_eq!(harness.state().doc.map.node(&created).and_then(|n| n.parent_id.as_deref()), Some("h3m0d1n4"));
 }
-
 #[test]
 fn delete_removes_the_subtree_and_selects_the_parent() {
     let mut harness = harness();
@@ -197,7 +249,6 @@ fn delete_removes_the_subtree_and_selects_the_parent() {
     assert!(map.node("4just4r").is_none(), "the child went with it");
     assert_eq!(harness.state().selected.as_deref(), Some("c0ndut4a"));
 }
-
 #[test]
 fn space_collapses_and_the_badge_expands() {
     let mut harness = harness();
@@ -211,7 +262,6 @@ fn space_collapses_and_the_badge_expands() {
     click_badge(&mut harness, "h3m0d1n4");
     assert_eq!(harness.state().doc.map.node("h3m0d1n4").and_then(|n| n.collapsed), None, "the badge expands it again");
 }
-
 #[test]
 fn arrow_navigation_walks_the_tree() {
     let mut harness = harness();
@@ -227,7 +277,6 @@ fn arrow_navigation_walks_the_tree() {
     key(&mut harness, egui::Key::ArrowUp, egui::Modifiers::NONE);
     assert_eq!(harness.state().selected.as_deref(), Some("l4ct4t03"));
 }
-
 #[test]
 fn alt_arrows_move_the_node_around_its_parent() {
     let mut harness = harness();
@@ -246,7 +295,6 @@ fn alt_arrows_move_the_node_around_its_parent() {
     key(&mut harness, egui::Key::ArrowLeft, egui::Modifiers::ALT);
     assert_eq!(harness.state().doc.map.node("c0ltur4s").and_then(|n| n.parent_id.as_deref()), Some("h3m0d1n4"), "Alt+Left outdents");
 }
-
 #[test]
 fn ctrl_z_undoes_the_last_edit_and_ctrl_y_redoes_it() {
     let mut harness = harness();
@@ -261,7 +309,6 @@ fn ctrl_z_undoes_the_last_edit_and_ctrl_y_redoes_it() {
     key(&mut harness, egui::Key::Y, egui::Modifiers::COMMAND);
     assert!(harness.state().doc.map.node("l4ct4t03").is_none(), "redo deletes it again");
 }
-
 #[test]
 fn the_card_menu_creates_a_child_by_click() {
     let mut harness = harness();
@@ -277,7 +324,6 @@ fn the_card_menu_creates_a_child_by_click() {
     let created = harness.state().editing.as_ref().map(|e| e.node.clone()).expect("the new child opens for typing");
     assert_eq!(harness.state().doc.map.node(&created).and_then(|n| n.parent_id.as_deref()), Some("c0ndut4a"));
 }
-
 #[test]
 fn the_note_window_writes_and_removes_the_note() {
     let mut harness = harness();
@@ -302,7 +348,6 @@ fn the_note_window_writes_and_removes_the_note() {
     harness.run_steps(2);
     assert!(!harness.state().doc.map.node("c0ltur4s").is_some_and(|n| n.has_note()));
 }
-
 #[test]
 fn dragging_the_handle_resizes_the_selected_card() {
     let mut harness = harness();
@@ -342,7 +387,6 @@ fn dragging_the_handle_resizes_the_selected_card() {
     let restored = harness.state().doc.map.node(root).and_then(|n| n.width).unwrap_or(localmind_layout::NODE_W);
     assert!(restored < width_now, "undo puts the width back: {width_now} -> {restored}");
 }
-
 #[test]
 fn enter_during_an_ime_composition_does_not_commit() {
     let mut harness = harness();
@@ -365,7 +409,6 @@ fn enter_during_an_ime_composition_does_not_commit() {
     assert!(harness.state().editing.is_none(), "the plain Enter commits");
     assert_eq!(node_text(harness.state(), "h3m0d1n4").as_deref(), Some("ka"));
 }
-
 #[test]
 fn clicking_the_empty_canvas_clears_the_selection() {
     let mut harness = harness();
@@ -377,7 +420,6 @@ fn clicking_the_empty_canvas_clears_the_selection() {
     click(&mut harness, corner);
     assert_eq!(harness.state().selected, None);
 }
-
 #[test]
 fn an_edit_does_not_move_the_canvas() {
     let mut harness = harness();
@@ -391,7 +433,6 @@ fn an_edit_does_not_move_the_canvas() {
     let after = (harness.state().view.zoom, harness.state().view.pan);
     assert_eq!(before, after);
 }
-
 #[test]
 fn expanding_a_branch_places_its_children_again() {
     let mut harness = harness();
@@ -403,7 +444,6 @@ fn expanding_a_branch_places_its_children_again() {
     assert_eq!(harness.state().doc.map.node("4nt1b10t").and_then(|n| n.collapsed), None);
     assert!(layout_tree(&harness.state().doc.map.nodes).positions.contains_key("4just4r"));
 }
-
 #[test]
 fn the_editor_starts_fitted_on_the_whole_map() {
     let mut harness = harness();
@@ -459,4 +499,134 @@ fn clicking_the_minimap_moves_the_view() {
     assert_ne!(before, after, "the click moves the canvas");
     assert!(after.x < before.x, "clicking right of the minimap centre pans the map left: {before:?} -> {after:?}");
     shot(&mut harness, "minimap");
+}
+
+/// The AI: "Generate map…" sends the topic, the mock answers a tree, and the map is replaced with
+/// it - as one undo step, with the view refitted.
+#[test]
+fn the_generate_dialog_replaces_the_map_with_the_answer() {
+    let answer = r#"{"text":"Sepse","children":[{"text":"Reconhecimento"},{"text":"Conduta"}]}"#;
+    let mut harness = harness_with(ai_editor(Ok(answer)));
+    harness.run_steps(3);
+    harness.state_mut().ai.generate_topic = Some("Sepse".into());
+    harness.run_steps(2);
+    shot(&mut harness, "ai-generate-dialog");
+
+    harness.get_by_label("Generate").click();
+    wait_for(&mut harness, |editor| editor.doc.map.title == "Sepse");
+
+    let map = &harness.state().doc.map;
+    assert_eq!(map.title, "Sepse");
+    let texts: Vec<&str> = map.nodes.iter().map(|n| n.text.as_str()).collect();
+    assert_eq!(texts, ["Sepse", "Reconhecimento", "Conduta"]);
+    assert_eq!(map.root().map(|n| n.text.as_str()), Some("Sepse"));
+    assert!(harness.state().doc.dirty);
+    assert!(harness.state().can_undo(), "the generation is one undo step");
+    shot(&mut harness, "ai-generated-map");
+}
+
+/// "Expand" on the selected card adds the model's items as children.
+#[test]
+fn expand_from_the_ai_menu_adds_children() {
+    let mut harness = harness_with(ai_editor(Ok(r#"{"items":["Gasometria","Hemoculturas"]}"#)));
+    harness.run_steps(3);
+    click_card(&mut harness, "l4ct4t03");
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Expand").click();
+    wait_for(&mut harness, |editor| editor.doc.map.children("l4ct4t03").len() == 2);
+
+    let map = &harness.state().doc.map;
+    let children: Vec<&str> = map.children("l4ct4t03").iter().map(|n| n.text.as_str()).collect();
+    assert_eq!(children, ["Gasometria", "Hemoculturas"]);
+    assert_eq!(harness.state().selected.as_deref(), Some(children.first().map(|_| map.children("l4ct4t03")[0].id.as_str()).unwrap_or("")));
+}
+
+/// The chat streams into a bubble, and the answer can be inserted as a node.
+#[test]
+fn the_chat_answers_and_inserts_a_node() {
+    let mut harness = harness_with(ai_editor(Ok("Uma ideia: revisar o protocolo.")));
+    harness.run_steps(3);
+    // The card is selected before the chat opens: the panel takes width from the map, and a click
+    // meant for a card under it would land on the panel.
+    click_card(&mut harness, "h3m0d1n4");
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Chat").click();
+    harness.run_steps(2);
+    assert!(harness.state().ai.chat.open);
+
+    harness.state_mut().ai.chat.input = "me dê uma ideia".into();
+    harness.run_steps(2);
+    harness.get_by_label("Send").click();
+    wait_for(&mut harness, |editor| editor.ai.chat.messages.len() == 2);
+    // The answer lands inside a frame; the bubble (and its buttons) is drawn on the next one.
+    harness.run_steps(2);
+
+    let chat = &harness.state().ai.chat;
+    assert_eq!(chat.messages.len(), 2, "the question and the answer");
+    assert_eq!(chat.messages[1].role, crate::ai::Role::Assistant);
+    assert_eq!(chat.messages[1].text, "Uma ideia: revisar o protocolo.");
+
+    harness.get_by_label("As a node").click();
+    harness.run_steps(2);
+    let children = harness.state().doc.map.children("h3m0d1n4").len();
+    assert_eq!(children, 3, "the fixture's two children plus the inserted node");
+    shot(&mut harness, "ai-chat");
+}
+
+/// A model that fails (no key, provider down) surfaces the reason instead of an empty map.
+#[test]
+fn a_failing_model_shows_the_reason() {
+    let mut harness = harness_with(ai_editor(Err("invalid API key")));
+    harness.run_steps(3);
+    harness.state_mut().ai.generate_topic = Some("Sepse".into());
+    harness.run_steps(2);
+    harness.get_by_label("Generate").click();
+    wait_for(&mut harness, |editor| editor.ai.error.is_some());
+
+    assert_eq!(harness.state().ai.error.as_deref(), Some("invalid API key"));
+    // The map is untouched.
+    assert_eq!(harness.state().doc.map.title, "Protocolo de sepse");
+    shot(&mut harness, "ai-error");
+}
+
+/// With no connection at all, the action explains what to do instead of failing silently.
+#[test]
+fn no_connection_says_how_to_add_one() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    click_card(&mut harness, "l4ct4t03");
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Expand").click();
+    harness.run_steps(2);
+    let error = harness.state().ai.error.clone().unwrap_or_default();
+    assert!(error.contains("Connections"), "{error}");
+}
+
+/// The connections panel: "Add connection" opens a draft with a provider preset, its base URL, and
+/// the key field. Nothing is written to the keychain here (the test never presses "Save key").
+///
+/// The draft's Cancel/Save buttons are not clicked: kittest's synthetic click does not reach the
+/// window's lower rows after the window grows (egui resolves the pointer against the area rect it
+/// knew at the start of the frame), so their behaviour is covered by hand QA of the render.
+#[test]
+fn the_connections_panel_opens_a_draft_from_a_preset() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Connections…").click();
+    harness.run_steps(2);
+    assert!(harness.state().ai.panel);
+
+    harness.get_by_label("Add connection").click();
+    harness.run_steps(3);
+    let draft = harness.state().ai.draft.as_ref().expect("a draft is open");
+    assert!(!draft.id.is_empty());
+    assert!(!draft.base_url.is_empty(), "a preset fills the base URL");
+    assert!(draft.label.contains("Gemini"), "the preset names the provider: {}", draft.label);
+    assert!(harness.query_by_label("API key").is_some(), "the key field is offered");
+    shot(&mut harness, "ai-connections");
 }

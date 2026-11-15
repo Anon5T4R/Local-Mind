@@ -32,9 +32,12 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
 ## Estrutura
 - `apps/localmind` — o app: `main.rs` (args, ícone, janela), `app.rs` (menus, toolbar, About com
   update), `canvas.rs` (desenho e interação do mapa, minimapa), `edit.rs` (seleção, texto inline,
-  menu do cartão, nota, teclado e undo), `export.rs` (Markdown/HTML/SVG), `png.rs` (o PNG pela
-  tesselação do epaint), `theme.rs` (os 6 temas), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs`
-  (idioma e tema), `i18n.rs`, `pickers.rs`, `fonts.rs`, `suite_entry.rs`, `build.rs`
+  menu do cartão, nota, teclado e undo), `ai.rs` (conexões, ações, chat e o strip de status),
+  `export.rs` (Markdown/HTML/SVG), `png.rs` (o PNG pela tesselação do epaint), `theme.rs` (os 6
+  temas), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `i18n.rs`, `pickers.rs`,
+  `fonts.rs`, `suite_entry.rs`, `build.rs`
+- `crates/localmind-ai` — prompts localizados, o extrator JSON tolerante, as 5 ações + o chat e o
+  `Backend` (o seam para a rede; os testes usam um mock, nenhum teste abre socket)
 - `crates/localmind-model` — nós, a árvore dos `parentId`, as edições e o histórico (L1,
   `Class::Standalone`: não depende de crate do workspace)
 - `crates/localmind-layout` — onde cada cartão fica (port do `layout.ts` do app antigo, mesmas

@@ -66,6 +66,7 @@ impl LocalApp {
             window_title: String::new(),
         };
         app.editor.set_theme(theme);
+        app.editor.ai.load();
         if let Some(path) = initial {
             app.open_path(path);
         }
@@ -115,6 +116,7 @@ impl LocalApp {
                 self.prefs.theme = theme.id().to_string();
                 self.prefs.save();
             }
+            crate::ai::menu(ui, &mut self.editor);
             ui.menu_button(tl!("Help"), |ui| {
                 if ui.button(tl!("Check for Updates.")).clicked() {
                     // The outcome shows in the About window, which is where a check belongs.

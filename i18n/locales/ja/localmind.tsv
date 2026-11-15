@@ -80,3 +80,41 @@
 	SVG	SVG
 	PNG	PNG
 	Export the map	マップを書き出す
+	AI	AI
+	Generate map…	マップを生成…
+	Expand	展開
+	Expand deep	深く展開
+	Explain	説明
+	Rewrite…	書き換え…
+	Chat	チャット
+	Connections…	接続…
+	AI connections	AI 接続
+	The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something.	キーは OS のキーチェーンに保存されます。モデルに質問したときだけ、マップがこのコンピューターの外に出ます。
+	key saved	キー保存済み
+	Remove	削除
+	Add connection	接続を追加
+	Provider	プロバイダー
+	Base URL	ベース URL
+	Model	モデル
+	Fetch models	モデルを取得
+	API key	API キー
+	Save key	キーを保存
+	Generate	生成
+	Generate map	マップを生成
+	A topic, or a whole text to organize.	テーマ、または整理したい文章全体。
+	Depth	深さ
+	Breadth	広がり
+	Rewrite	書き換え
+	Apply	適用
+	shorter	短く
+	more technical	より技術的に
+	as a question	質問の形に
+	fix the wording	表現を直す
+	Stop	停止
+	Send	送信
+	You	あなた
+	Message the AI…	AI へのメッセージ…
+	Clear conversation	会話を消す
+	As a node	ノードとして
+	As a branch	ブランチとして
+	No AI connection yet. Open AI > Connections… and add one.	AI 接続がまだありません。AI > 接続… を開いて追加してください。
