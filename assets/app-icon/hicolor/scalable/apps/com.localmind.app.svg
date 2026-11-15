@@ -4,10 +4,14 @@
 
   Language of the family: full-bleed 512 tile (32..480, rx 100), diagonal gradient with a top
   sheen, one white glyph at ~70% of the tile, "Taylor" signature at the bottom. Hue: lime
-  (#a3e635 -> #4d7c0f) - the one band of the wheel the suite does not use yet (pdf red ~10°,
+  (#84cc16 -> #4d7c0f) - the one band of the wheel the suite does not use yet (pdf red ~10°,
   slides orange ~21°, paint amber ~43°, player crimson ~343°, photo fuchsia ~289°, keys and
   obsidian indigo ~242-245°, office and image blue ~219°, utils green ~158°, sheets emerald
   ~160°, vector teal ~175°). The empty band is 50-150°; 82° is the middle of it.
+
+  The light stop is #84cc16, not #a3e635: white-on-lime has to survive under the glyph, and
+  #a3e635 gives ~1.5:1 while #84cc16 gives ~2.0:1 - the same ceiling the family's paint icon has.
+  With the lighter stop the upper branch melted into the bright quadrant of the gradient.
 
   The glyph is the app's own object: the map. A central card with four smaller cards around it,
   joined by thin links - the hub the window draws, not a curve with nodes (Local Vector's glyph)
@@ -16,13 +20,13 @@
   as a crosshair. The satellites are square-ish because a circle that size collapses into a dot
   at 16 px while a rounded square keeps a corner.
 
-  `localmind-small.svg` is the same art ~20% bolder for 16-32 px, where the master's links fall
-  under a pixel. 40 px and up use this file.
+  `localmind-small.svg` is NOT this art shrunk: at 16-32 px a four-way hub reads as a plus, so the
+  small master drops the upper branch and becomes a three-branch tree. 40 px and up use this file.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a3e635"/>
+      <stop offset="0" stop-color="#84cc16"/>
       <stop offset="1" stop-color="#4d7c0f"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">

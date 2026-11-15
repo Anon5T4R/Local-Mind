@@ -1,15 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Local Mind icon, small sizes (16, 20, 24 and 32 px) only.
+  Local Mind icon, small sizes (16, 20, 24 and 32 px) only - a DIFFERENT silhouette, not the
+  master shrunk.
 
-  Same art as `localmind.svg` with the links ~50% thicker, the cards ~20% larger and the
-  satellites a little closer: at 16 px the master's 12 px link is 0.4 px and the four branches
-  stop reading as branches. 40 px and up use the master.
+  At 16 px the four-way hub reads as a plus/crosshair: the upper branch plus the two side arms
+  make a symmetric cross, and the eye files it as "add"/"expand", not as a map. Dropping the upper
+  branch and keeping three satellites on one side turns the shape into a tree (one card, a trunk,
+  three branches) that survives the smallest size as "a map".
+
+  Same palette and same tile as the master (#84cc16 -> #4d7c0f): the light stop is the one with
+  enough contrast for the white glyph. 40 px and up use `localmind.svg`.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a3e635"/>
+      <stop offset="0" stop-color="#84cc16"/>
       <stop offset="1" stop-color="#4d7c0f"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
@@ -23,20 +28,20 @@
   <rect x="32" y="32" width="448" height="256" rx="100" fill="url(#sheen)"/>
 
   <g fill="#ffffff">
-    <!-- links -->
-    <rect x="238" y="126" width="36" height="82"/>
-    <rect x="238" y="304" width="36" height="60"/>
-    <rect x="134" y="238" width="58" height="36"/>
-    <rect x="312" y="238" width="46" height="36"/>
+    <!-- the trunk and the three stubs (under the cards) -->
+    <rect x="204" y="239" width="60" height="34"/>
+    <rect x="264" y="122" width="34" height="268"/>
+    <rect x="298" y="105" width="26" height="34"/>
+    <rect x="298" y="239" width="26" height="34"/>
+    <rect x="298" y="373" width="26" height="34"/>
 
-    <!-- satellites: branches of a map are not all the same size -->
-    <rect x="208" y="74" width="96" height="56" rx="18"/>
-    <rect x="206" y="360" width="100" height="58" rx="18"/>
-    <rect x="74" y="222" width="64" height="44" rx="14"/>
-    <rect x="352" y="216" width="96" height="56" rx="18"/>
+    <!-- the root card -->
+    <rect x="72" y="200" width="132" height="112" rx="22"/>
 
-    <!-- the central card -->
-    <rect x="181" y="208" width="150" height="96" rx="20"/>
+    <!-- the three branches -->
+    <rect x="324" y="76" width="124" height="92" rx="20"/>
+    <rect x="324" y="210" width="124" height="92" rx="20"/>
+    <rect x="324" y="344" width="124" height="92" rx="20"/>
   </g>
 
   <!-- brand signature -->
