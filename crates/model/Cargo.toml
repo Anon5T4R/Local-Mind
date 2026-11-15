@@ -1,0 +1,16 @@
+[package]
+name = "localmind-model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+description = "Local Mind - the mind map itself: nodes, the tree they form, the edits, and the undo history"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

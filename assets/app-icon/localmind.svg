@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Local Mind icon: a central card with four branches around it, on the suite's tile.
+
+  Language of the family: full-bleed 512 tile (32..480, rx 100), diagonal gradient with a top
+  sheen, one white glyph at ~70% of the tile, "Taylor" signature at the bottom. Hue: lime
+  (#a3e635 -> #4d7c0f) - the one band of the wheel the suite does not use yet (pdf red ~10°,
+  slides orange ~21°, paint amber ~43°, player crimson ~343°, photo fuchsia ~289°, keys and
+  obsidian indigo ~242-245°, office and image blue ~219°, utils green ~158°, sheets emerald
+  ~160°, vector teal ~175°). The empty band is 50-150°; 82° is the middle of it.
+
+  The glyph is the app's own object: the map. A central card with four smaller cards around it,
+  joined by thin links - the hub the window draws, not a curve with nodes (Local Vector's glyph)
+  and not a line chart (Local Slides'). The links are a third of a satellite's width on purpose:
+  at bar width approaching the card's, the four arms fuse into one fat cross and the icon reads
+  as a crosshair. The satellites are square-ish because a circle that size collapses into a dot
+  at 16 px while a rounded square keeps a corner.
+
+  `localmind-small.svg` is the same art ~20% bolder for 16-32 px, where the master's links fall
+  under a pixel. 40 px and up use this file.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a3e635"/>
+      <stop offset="1" stop-color="#4d7c0f"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tile -->
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#bg)"/>
+  <rect x="32" y="32" width="448" height="256" rx="100" fill="url(#sheen)"/>
+
+  <g fill="#ffffff">
+    <!-- links (under the cards), a third of a satellite's width -->
+    <rect x="250" y="136" width="12" height="82"/>
+    <rect x="250" y="294" width="12" height="74"/>
+    <rect x="146" y="250" width="50" height="12"/>
+    <rect x="316" y="250" width="38" height="12"/>
+
+    <!-- satellites: branches of a map are not all the same size, and equal ones read as a crosshair -->
+    <rect x="222" y="88" width="68" height="48" rx="14"/>
+    <rect x="220" y="368" width="72" height="50" rx="14"/>
+    <rect x="86" y="232" width="60" height="44" rx="12"/>
+    <rect x="354" y="228" width="92" height="56" rx="16"/>
+
+    <!-- the central card -->
+    <rect x="196" y="218" width="120" height="76" rx="18"/>
+  </g>
+
+  <!-- brand signature -->
+  <text x="256" y="464" font-family="Segoe Script, cursive" font-size="42"
+        fill="#ffffff" opacity="0.85" text-anchor="middle">Taylor</text>
+</svg>

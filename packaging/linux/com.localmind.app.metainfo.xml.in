@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (software centres). package.sh substitutes @VERSION@ and @DATE@ from
+     Cargo.toml and the build date. -->
+<component type="desktop-application">
+  <id>com.localmind.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>Local Mind</name>
+  <summary>Mind maps with a balanced layout</summary>
+  <developer id="com.localmind">
+    <name>Local Mind contributors</name>
+  </developer>
+  <description>
+    <p>
+      Local Mind is a mind map editor: a central idea with branches that fan out left, right, up and
+      down. Maps are the .tmind files the LocalMind (Electron) app has been writing, so existing maps
+      open as they are.
+    </p>
+    <p>
+      Built with a Rust + egui window: no account, no telemetry and no third-party server.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.localmind.app.desktop</launchable>
+  <icon type="stock">com.localmind.app</icon>
+  <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
+  <url type="homepage">https://github.com/Anon5T4R/Local-Mind</url>
+  <url type="bugtracker">https://github.com/Anon5T4R/Local-Mind/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Graphics</category>
+  </categories>
+  <keywords>
+    <keyword>mind map</keyword>
+    <keyword>mindmap</keyword>
+    <keyword>brainstorm</keyword>
+    <keyword>notes</keyword>
+  </keywords>
+  <requires>
+    <display_length compare="ge">900</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <provides>
+    <binary>localmind</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

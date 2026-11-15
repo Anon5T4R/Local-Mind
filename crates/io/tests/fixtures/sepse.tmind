@@ -1,0 +1,86 @@
+{
+  "id": "k3n9dq2m",
+  "title": "Protocolo de sepse",
+  "createdAt": 1731600000000,
+  "updatedAt": 1731600600000,
+  "nodes": [
+    {
+      "id": "r00t4a1c",
+      "text": "Sepse",
+      "parentId": null,
+      "note": "Triagem na admissão",
+      "collapsed": false
+    },
+    {
+      "id": "h3m0d1n4",
+      "text": "Reconhecimento",
+      "parentId": "r00t4a1c",
+      "side": "right",
+      "color": "#3a8dde"
+    },
+    {
+      "id": "l4ct4t03",
+      "text": "Lactato",
+      "parentId": "h3m0d1n4",
+      "note": "Repetir em 2h se elevado"
+    },
+    {
+      "id": "c0ltur4s",
+      "text": "Hemoculturas",
+      "parentId": "h3m0d1n4",
+      "width": 260
+    },
+    {
+      "id": "c0ndut4a",
+      "text": "Conduta",
+      "parentId": "r00t4a1c",
+      "side": "right",
+      "color": "#e74c3c"
+    },
+    {
+      "id": "4nt1b10t",
+      "text": "Antibiótico em 1h",
+      "parentId": "c0ndut4a",
+      "collapsed": true
+    },
+    {
+      "id": "4just4r",
+      "text": "Ajustar pela cultura",
+      "parentId": "4nt1b10t"
+    },
+    {
+      "id": "v0lum3r3",
+      "text": "Volume 30 mL/kg",
+      "parentId": "c0ndut4a",
+      "fontSize": 15
+    },
+    {
+      "id": "v4s0pr3s",
+      "text": "Vasopressor",
+      "parentId": "c0ndut4a"
+    },
+    {
+      "id": "m0n1t0r4",
+      "text": "Monitorização",
+      "parentId": "r00t4a1c",
+      "side": "left"
+    },
+    {
+      "id": "d3b1t0s3",
+      "text": "Diurese",
+      "parentId": "m0n1t0r4"
+    },
+    {
+      "id": "r3av4l14",
+      "text": "Reavaliação",
+      "parentId": "m0n1t0r4",
+      "side": "down",
+      "sticker": "star"
+    },
+    {
+      "id": "0rfa0sem4",
+      "text": "Nó órfão de um delete parcial",
+      "parentId": "fantasma"
+    }
+  ]
+}

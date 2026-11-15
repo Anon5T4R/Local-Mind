@@ -1,0 +1,36 @@
+[package]
+name = "localmind"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+description = "Local Mind - mind maps with a balanced four-way layout (egui)"
+default-run = "localmind"
+
+[lints]
+workspace = true
+
+[dependencies]
+craft-i18n = { workspace = true }
+craft-update = { workspace = true }
+craft-window = { workspace = true }
+# `clipboard` is a separate eframe feature in 0.37: without it egui-winit simulates an in-process
+# clipboard and cut/copy/paste, RequestPaste and the Wayland PRIMARY path are unavailable.
+eframe = { workspace = true, features = ["default_fonts", "clipboard", "wgpu", "glow", "accesskit", "wayland", "x11"] }
+egui = { workspace = true }
+log = { workspace = true }
+pollster = { workspace = true }
+rfd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# the app's own layers (crates/localmind-*)
+localmind-io = { workspace = true }
+localmind-layout = { workspace = true }
+localmind-model = { workspace = true }
+
+[build-dependencies]
+# Icon + VERSIONINFO for localmind.exe; build.rs only uses it when targeting Windows.
+winresource = "0.1"

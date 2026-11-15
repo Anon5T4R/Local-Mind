@@ -1,0 +1,15 @@
+[package]
+name = "localmind-layout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+description = "Local Mind - the balanced four-way mind map layout (geometry only, no UI)"
+
+[lints]
+workspace = true
+
+[dependencies]
+localmind-model = { workspace = true }

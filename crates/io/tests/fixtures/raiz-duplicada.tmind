@@ -1,0 +1,11 @@
+{
+  "id": "dup3r00t",
+  "title": "Duas raízes",
+  "createdAt": 1,
+  "updatedAt": 2,
+  "nodes": [
+    { "id": "R1", "text": "Primeira", "parentId": null },
+    { "id": "R2", "text": "Segunda", "parentId": null },
+    { "id": "F1", "text": "Filha da primeira", "parentId": "R1" }
+  ]
+}
