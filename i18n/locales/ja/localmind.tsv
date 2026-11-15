@@ -135,3 +135,9 @@
 	Save and open a map	マップの保存と読み込み
 	The maps are .tmind files, the same format the original LocalMind wrote.	マップは .tmind ファイルです。元の LocalMind と同じ形式です。
 	Light	ライト
+	New branch above	上にブランチを追加
+	New branch below	下にブランチを追加
+	New branch to the left	左にブランチを追加
+	New branch to the right	右にブランチを追加
+	Add a branch to a side	ブランチを横に追加
+	The model is taking a while…	モデルの応答に時間がかかっています…

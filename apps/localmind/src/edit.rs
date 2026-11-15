@@ -71,10 +71,12 @@ pub struct NoteState {
     pub draft: String,
 }
 
-/// The "move to…" dialog: which node, and the parent picked so far.
+/// The "move to…" dialog: which node, the parent picked so far, and (when that parent is the root)
+/// the direction to put it on.
 pub struct MoveTo {
     pub node: String,
     pub choice: Option<String>,
+    pub side: Option<Side>,
 }
 
 impl Editor {
@@ -167,9 +169,16 @@ impl Editor {
 
     /// Adds a child to `node`, selects it and opens its text field (Tab).
     pub fn add_child(&mut self, node: &str) {
+        self.add_child_on(node, None);
+    }
+
+    /// Adds a child to `node` on a direction (the root's "+" buttons) or with the automatic side
+    /// (`None`), then selects it and opens its text field. `side` only means something under the
+    /// root; the callers that pass it always pass the root.
+    pub fn add_child_on(&mut self, node: &str, side: Option<Side>) {
         let mut created = None;
         self.edit(|map| {
-            created = Some(map.add_child(node, tl!("New node"), None));
+            created = Some(map.add_child(node, tl!("New node"), side));
             true
         });
         if let Some(id) = created {
@@ -178,6 +187,13 @@ impl Editor {
             // the user types into a text box that is not over the card it belongs to.
             self.reveal_selected();
             self.begin_edit(&id);
+        }
+    }
+
+    /// One of the root's "+" buttons: adds a branch on that side and starts editing its text.
+    pub fn add_root_child(&mut self, side: Side) {
+        if let Some(root) = self.doc.root_id() {
+            self.add_child_on(&root, Some(side));
         }
     }
 
@@ -411,6 +427,9 @@ impl Editor {
     pub fn ui(&mut self, ui: &mut Ui) {
         // The chat takes width from the map area, so it goes first.
         crate::ai::chat_panel(ui, self);
+        // The AI error banner and the in-flight status go before the canvas: the canvas takes all
+        // the remaining space, so a strip drawn after it is clipped and the user sees nothing.
+        crate::ai::status_strip(ui, self);
         // Read before any widget runs: the text field consumes the keys it uses, Enter included,
         // and the commit has to see the Enter of the frame it happened in.
         let keys = KeysThisFrame::read(ui.ctx());
@@ -450,8 +469,8 @@ impl Editor {
         if let Some(id) = out.badge_clicked {
             self.toggle_collapse(&id);
         }
-        if let Some((node, target)) = out.reparent {
-            self.reparent(&node, &target);
+        if let Some(side) = out.hot_corner {
+            self.add_root_child(side);
         }
         if let Some((id, at)) = out.context_menu {
             self.selected = Some(id.clone());
@@ -743,11 +762,12 @@ impl Editor {
         }
     }
 
-    /// Moves a node (with its subtree) under another card: the Ctrl+drag drop, and the dialog.
-    pub fn reparent(&mut self, node: &str, target: &str) {
+    /// Moves a node (with its subtree) under another card, optionally putting it on a direction of
+    /// the root in the same undo step. This is what the "Move to…" dialog applies.
+    pub fn move_node_to(&mut self, node: &str, parent: &str, side: Option<Side>) {
         let node_owned = node.to_string();
-        let target_owned = target.to_string();
-        if self.edit(|map| map.reparent(&node_owned, &target_owned)) {
+        let parent_owned = parent.to_string();
+        if self.edit(|map| map.move_to(&node_owned, &parent_owned, side)) {
             self.selected = Some(node_owned);
             // The map changed shape: frame it again so the moved branch is in sight.
             self.view.needs_fit = true;
@@ -755,10 +775,10 @@ impl Editor {
         }
     }
 
-    /// Opens the "move to…" dialog for a node (the keyboard-free re-parent).
+    /// Opens the "move to…" dialog for a node (the keyboard-free re-parent and direction change).
     pub fn open_move_to(&mut self, node: &str) {
         if self.doc.map.node(node).is_some_and(|n| n.parent_id.is_some()) {
-            self.move_to = Some(MoveTo { node: node.to_string(), choice: None });
+            self.move_to = Some(MoveTo { node: node.to_string(), choice: None, side: None });
             self.menu = None;
         }
     }
@@ -816,11 +836,13 @@ impl Editor {
         self.note = Some(note);
     }
 
-    /// The "move to…" dialog: pick the new parent from a list (no drag involved).
+    /// The "move to…" dialog: pick the new parent from a list, and a direction when that parent is
+    /// the root (no drag involved).
     fn move_to_window(&mut self, ctx: &Context) {
         let Some(mut state) = self.move_to.take() else { return };
         let subject = self.doc.map.node(&state.node).map(|n| n.text.clone()).unwrap_or_default();
         let targets = self.doc.map.reparent_targets(&state.node);
+        let root = self.doc.root_id();
         let mut open = true;
         let mut apply = false;
         let mut cancel = false;
@@ -846,6 +868,27 @@ impl Editor {
                         }
                     }
                 });
+                // Under the root, the branch can be sent to any of the four directions; the field
+                // is meaningless deeper, so the selector only shows for the root.
+                if state.choice.as_deref() == root.as_deref() {
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.label(tl!("Side"));
+                        egui::ComboBox::from_id_salt("move-to-side").selected_text(side_label(state.side)).show_ui(ui, |ui| {
+                            for (label, side) in [
+                                (tl!("Automatic"), None),
+                                (tl!("Left"), Some(Side::Left)),
+                                (tl!("Right"), Some(Side::Right)),
+                                (tl!("Up"), Some(Side::Up)),
+                                (tl!("Down"), Some(Side::Down)),
+                            ] {
+                                if ui.selectable_label(state.side == side, label).clicked() {
+                                    state.side = side;
+                                }
+                            }
+                        });
+                    });
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     if ui.add_enabled(state.choice.is_some(), egui::Button::new(tl!("Move"))).clicked() {
@@ -861,7 +904,7 @@ impl Editor {
         }
         if apply {
             if let Some(target) = state.choice.clone() {
-                self.reparent(&state.node, &target);
+                self.move_node_to(&state.node, &target, state.side);
             }
             return;
         }
@@ -890,7 +933,8 @@ impl Editor {
                         ("Space", tl!("Collapse or expand the branch")),
                         ("Arrows", tl!("Move the selection through the map")),
                         ("Alt + Arrows", tl!("Move the card: reorder, indent, outdent")),
-                        ("Ctrl + drag", tl!("Move a card under another one")),
+                        ("+ around the root", tl!("Add a branch to a side")),
+                        ("Right click → Move to…", tl!("Move a card under another one")),
                         ("Ctrl + Z / Ctrl + Y", tl!("Undo and redo")),
                         ("Right click", tl!("The card menu: style, note, move, delete")),
                         ("Drag / scroll", tl!("Pan and zoom the canvas")),
@@ -1160,6 +1204,17 @@ fn parse_colour(hex: &str) -> egui::Color32 {
     let hex = hex.trim_start_matches('#');
     let channel = |at: usize| u8::from_str_radix(&hex[at..at + 2], 16).unwrap_or(0);
     egui::Color32::from_rgb(channel(0), channel(2), channel(4))
+}
+
+/// The label of a side in the "Move to…" dialog: the same words the card menu uses.
+fn side_label(side: Option<Side>) -> &'static str {
+    match side {
+        None => tl!("Automatic"),
+        Some(Side::Left) => tl!("Left"),
+        Some(Side::Right) => tl!("Right"),
+        Some(Side::Up) => tl!("Up"),
+        Some(Side::Down) => tl!("Down"),
+    }
 }
 
 /// A short label for a menu line: the text with an ellipsis when it is long.

@@ -11,9 +11,11 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
   movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem. O menu do cartão (clique direito) tem estrutura,
   lado, tamanho do texto, cor, largura, nota, "Mover para…" e excluir; a alça no canto do cartão
   selecionado muda a largura (um passo de desfazer por arrasto).
-- **Mover um cartão para outro pai**: **Ctrl+arrasto** leva o cartão (com a subárvore) para baixo de
-  outro, destacando o alvo antes de soltar e recusando os ciclos; o menu do cartão e o menu **Edit**
-  abrem "Mover para…" para escolher o pai numa lista.
+- **Mover um cartão**: o menu do cartão e o menu **Edit** abrem "Mover para…" para escolher o pai
+  numa lista e, quando o pai é a raiz, a **direção** (Esquerda, Direita, Cima, Baixo) na mesma
+  operação. Os **"+" nos quatro lados da raiz** (hot corners, como no app antigo) criam um ramo já
+  naquela direção; o submenu **Side** muda a direção de um filho da raiz. O Ctrl+arrasto foi tentado
+  e **removido** na v1.1.0 por não ser confiável no uso real.
 - **Nota do nó editável** (menu → Nota…), o ponto no cartão e a nota nos exports.
 - **Sete temas nomeados** (o escuro padrão, **Claro** no padrão craft, Natureza, Azul escuro, Verde
   calmo, Rosa pastel e PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o
@@ -21,7 +23,9 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 - **IA com a sua chave** (menu **AI**): conexões com preset de provedor e chave no keychain do
   sistema; gerar mapa de um tema ou de um texto, expandir, expandir fundo, explicar, reescrever com
   instrução, e um chat com streaming que insere a resposta como nó ou ramo. Sem motor local: os
-  modelos são os do provedor que você configurar.
+  modelos são os do provedor que você configurar. **Toda falha do provedor aparece num banner com o
+  motivo** (chave inválida, cota esgotada, saldo, rota) e o tempo decorrido fica visível; um stream
+  que para de responder termina em erro, não em espera silenciosa.
 - **Minimapa** no canto inferior direito, com o viewport marcado e clique/arrasto para navegar.
 - **Export** em Markdown, HTML, SVG e PNG (View/Arquivo → Exportar). O HTML leva as cores do tema;
   o PNG é o mesmo desenho da tela em 2×.
@@ -43,10 +47,12 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 ## O que ainda vem
 
-A porta do LocalMind Electron está fechada na **v1.0.0**: a paridade item a item está na tabela do
-`UPSTREAM-SYNC.md`, e as diferenças conscientes (IA só remota, nota editável, re-parent por arrasto,
-tema claro, SVG/PNG próprios, janela por arquivo) estão lá declaradas. Daqui em diante são
-correções de campo e ideias novas, não paridade.
+A porta do LocalMind Electron está fechada (v1.0.0) e a v1.1.0 trouxe os hot corners (paridade), o
+"mover para…" com lado e a robustez de IA (banner, motivo, timeouts). A paridade item a item está na
+tabela do `UPSTREAM-SYNC.md`, e as diferenças conscientes (IA só remota, nota editável, tema claro,
+SVG/PNG próprios, janela por arquivo) estão lá declaradas. **Ctrl+arrasto** fica como melhoria futura:
+passou no kittest mas não foi confiável no uso real, e os hot corners + o diálogo cobrem o fluxo.
+Daqui em diante são correções de campo e ideias novas, não paridade.
 
 ## Formato
 

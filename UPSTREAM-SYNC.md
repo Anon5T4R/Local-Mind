@@ -22,7 +22,8 @@ virou a suíte deste app em `crates/localmind-*`.
 | F2 (v0.2.0) | edição: texto inline (guarda de IME), filho/irmão, excluir, colapsar, desfazer/refazer, indentar/desindentar/mover, menu de contexto, largura por arrasto, nota editável | **concluída e publicada** (16 testes de UI no kittest) |
 | F3 (v0.3.0) | estilos por nó (cor/tinta, fonte, lado), 6 temas nomeados, minimapa, export Markdown/HTML/SVG/PNG | **concluída e publicada** |
 | F4 (v0.4.0) | IA remota (BYOK via `local-ai`): conexões com chave no keychain, 5 ações, chat com streaming, cancelar/erros | **concluída e publicada** |
-| F5 (v1.0.0) | paridade e polimento: re-parent por Ctrl+arrasto + diálogo "Mover para…", tema claro craft, Ajuda ("Teclado e mouse"), tabela final, fixture de `.tmind` real, docs | **concluída e publicada** |
+| F5 (v1.0.0) | paridade e polimento: tema claro craft, Ajuda ("Teclado e mouse"), tabela final, fixture de `.tmind` real, docs | **concluída e publicada** |
+| F6 (v1.1.0) | **hot corners** (os "+" nos 4 lados da raiz, paridade), "Mover para…" com **lado** (diálogo, sem arrasto), robustez de IA (banner de erro visível, motivo do provider, timeouts, e2e localhost), preset OpenCode GO corrigido; **Ctrl+arrasto removido** (gesto instável no uso real) | **concluída e publicada** |
 
 ## Divergências declaradas (não são acidente)
 
@@ -36,11 +37,13 @@ virou a suíte deste app em `crates/localmind-*`.
 - **Nota do nó é editável.** O app antigo tem o campo `note` e desenha o ponto, mas nenhuma forma de
   escrever nele (`setNote` nunca é chamado pela UI). Aqui a nota é editável — melhoria pedida, não
   paridade.
-- **Re-parent por arrasto.** O app antigo não tinha como mover um nó para outro pai a não ser
-  desfazer e refazer a árvore. Aqui **Ctrl+arrasto** move o nó (com a subárvore) para baixo de outro
-  cartão, com alvo destacado antes do drop e a recusa de ciclos no modelo; sem mouse, o menu do cartão
-  e o menu **Edit** abrem "Mover para…", que escolhe o pai numa lista. Acréscimo pedido no backlog,
-  não paridade.
+- **Re-parent pelo diálogo, não por arrasto.** O app antigo não tinha como mover um nó para outro
+  pai a não ser desfazer e refazer a árvore. Aqui o menu do cartão e o menu **Edit** abrem
+  "Mover para…", que escolhe o pai numa lista e, quando o pai é a raiz, a **direção** (Esquerda,
+  Direita, Cima, Baixo) na mesma operação. O **Ctrl+arrasto** foi tentado na F5 e **removido na
+  v1.1.0**: passava no kittest mas o gesto real não era confiável (um gesto que funciona 95% das
+  vezes é pior que nenhum); fica registrado como melhoria futura. Os "+" da raiz (hot corners)
+  criam um ramo já na direção certa, e o submenu "Side" muda a direção de um filho da raiz.
 - **Arrastar um arquivo para a janela** abre o mapa (o antigo só abria por diálogo/argv).
 - **Temas:** o antigo tem 6 temas por variáveis CSS; aqui as **paletas são as mesmas** (`--bg`, `--panel`, `--accent`, `--canvas-dots`, `--minimap-*` viram os campos de `theme::Colors`) e mudam a janela inteira, o canvas e o minimapa. Além dos seis herdados, um **tema claro** no padrão craft (os cinzas neutros e o azul da suíte). Diferente do antigo: a escolha fica no `prefs.json` e no menu **View → Theme** (o antigo escondia nas Configurações).
 - **Export:** Markdown, HTML, **SVG** e **PNG**. O SVG é acréscimo nosso (vetor, sem rasterizador). O PNG é renderizado pelo **mesmo desenho da tela** (contexto egui off-screen → malhas do epaint → preenchimento em software aqui, com o atlas de fonte), em 2× e comprimido com `miniz_oxide` (Rust puro, já no grafo via `zip`/`flate2`; compressão com nível 6, ~65 KB para um mapa típico). Não há lib de rasterização envolvida.
@@ -79,7 +82,8 @@ deliberada e está detalhada na seção acima.
 | desfazer/refazer (Ctrl+Z / Ctrl+Y) | igual | `model::History` |
 | indentar/desindentar e reordenar (Alt+setas) | igual | `edit.rs` (`indent`/`outdent`/`moveUp`/`moveDown`) |
 | menu do cartão: editar, filho, irmão, IA, colapsar, lado, fonte, largura, cor, excluir | igual | `edit.rs` (`card_menu`) |
-| **mover nó para outro pai** | **acréscimo**: Ctrl+arrasto (drop validado, recusa ciclo) **e** diálogo "Mover para…" | `canvas.rs` + `edit.rs` (`reparent`) |
+| **hot corners: "+" nos 4 lados da raiz** | **paridade**: círculo tracejado no accent, clique cria o filho já naquela direção, seleciona e abre o texto; desenhados fora do `paint` (nunca no PNG) | `canvas.rs` (`corner_at`/`hot_corners`) |
+| **mover nó para outro pai / outra direção** | **acréscimo**: diálogo "Mover para…" (pai + lado no root); o Ctrl+arrasto da F5 foi removido na v1.1.0 | `edit.rs` (`move_node_to`) |
 | mover/redimensionar o próprio cartão | pan do canvas + alça de largura | canvas |
 
 ### Notas, estilo e temas
@@ -122,6 +126,31 @@ deliberada e está detalhada na seção acima.
 | reusar a janela existente (`second-instance`) | **divergência**: cada arquivo abre a própria janela | — |
 | pt/en/es (LocalePicker) | pt-br/es/ja (inglês é a fonte); segue o sistema, salvo | `i18n/` |
 | About + verificação de atualização | igual (`craft-update`) + Ajuda "Teclado e mouse" | `app.rs` |
+
+## Robustez da IA (v1.1.0)
+
+O teste real (chave do usuário) expôs defeitos que o mock em processo não via:
+
+- **O banner de erro era invisível**: o strip de status/erro era desenhado **depois** do canvas, que
+  consome todo o espaço; o erro era setado e o usuário não via nada. Agora o strip é desenhado
+  **antes** do canvas, com o motivo do provider e o botão Dismiss; o teste `ai-quota-error` fixa o
+  caso "free usage reached" no render.
+- **Erro do provider sem motivo**: o `ureq` tratava não-2xx como erro de transporte e descartava o
+  corpo com o motivo ("invalid API key", "insufficient balance", "free usage limit"). O agente agora
+  usa `http_status_as_error(false)` e lê o corpo; `provider_error` extrai `error.message`.
+- **Sem timeout**: o cliente não tinha deadline de leitura; um stream que não manda `[DONE]` e não
+  fecha ficava pendurado. Agora há deadlines de DNS/conexão/envio/headers/corpo (10/10/30/60/120 s),
+  e um stream que expira **depois** de já ter texto devolve o texto em vez de perdê-lo.
+- **e2e permanente em localhost**: `crates/ai/tests/sse_e2e.rs` sobe um `TcpListener` que responde
+  SSE OpenAI-shaped e cobre sucesso (texto → mapa), 401, 429, erro de quota dentro de 200 e o header
+  `Authorization`. É o teste que o mock não era.
+- **Preset OpenCode GO**: apontava para a base do **Zen** (`/zen/v1`) e não mandava
+  `x-opencode-session`; a base correta do Go é `https://opencode.ai/inference/go/openai/v1`, com o
+  header de sessão e User-Agent do app. O Go exige **chave pessoal** (chave de time é recusada) e o
+  Zen exige créditos; o app agora mostra o motivo exato em vez de "nada".
+
+O `local-ai` mudou (timeouts, `provider_error`, `chat_stream_with_key` aditivo, preset Go); os
+espelhos dos irmãos (office/pdf/obsidian) precisam do mesmo sync antes de reler a fonte.
 
 ## Forks vendored (`libs/`)
 

@@ -31,14 +31,16 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
 
 ## Estrutura
 - `apps/localmind` — o app: `main.rs` (args, ícone, janela), `app.rs` (menus, toolbar, About com
-  update), `canvas.rs` (desenho e interação do mapa, minimapa, alça de largura, re-parent por
-  Ctrl+arrasto), `edit.rs` (seleção, texto inline, menu do cartão, nota, "Mover para…", Ajuda,
-  teclado e undo), `ai.rs` (conexões, ações, chat e o strip de status), `export.rs`
+  update), `canvas.rs` (desenho e interação do mapa, minimapa, alça de largura, "+" nos 4 lados da
+  raiz), `edit.rs` (seleção, texto inline, menu do cartão, nota, "Mover para…" com pai/lado, Ajuda,
+  teclado e undo), `ai.rs` (conexões, ações, chat e o strip de status/erro, desenhado antes do
+  canvas), `export.rs`
   (Markdown/HTML/SVG), `png.rs` (o PNG pela tesselação do epaint), `theme.rs` (os 7 temas, com o
   claro craft), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `i18n.rs`,
   `pickers.rs`, `fonts.rs`, `suite_entry.rs`, `build.rs`
 - `crates/localmind-ai` — prompts localizados, o extrator JSON tolerante, as 5 ações + o chat e o
-  `Backend` (o seam para a rede; os testes usam um mock, nenhum teste abre socket)
+  `Backend` (o seam para a rede; os testes unitários usam um mock e o e2e em
+  `tests/sse_e2e.rs` sobe um servidor SSE em `127.0.0.1` para exercitar o caminho real)
 - `crates/localmind-model` — nós, a árvore dos `parentId`, as edições e o histórico (L1,
   `Class::Standalone`: não depende de crate do workspace)
 - `crates/localmind-layout` — onde cada cartão fica (port do `layout.ts` do app antigo, mesmas

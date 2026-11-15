@@ -330,19 +330,20 @@ impl MindMap {
         true
     }
 
-    /// Moves `id` (with its subtree) under `new_parent`. Refused when it would not change anything,
-    /// when the node is the root, or when `new_parent` is the node itself or inside its subtree -
-    /// that last one would cut the map in two, a cycle nobody can repair from the canvas.
-    pub fn reparent(&mut self, id: &str, new_parent: &str) -> bool {
+    /// Moves `id` (with its subtree) under `new_parent`, optionally setting the moved node's `side`
+    /// in the same step. Refused when it would change nothing, when the node is the root, or when
+    /// `new_parent` is the node itself or inside its subtree - that last one would cut the map in
+    /// two, a cycle nobody can repair.
+    ///
+    /// `side` only means something under the root (the only place the layout reads it); under any
+    /// other parent the field is cleared, so a branch moved into another branch cannot keep a stale
+    /// direction the layout ignores.
+    pub fn move_to(&mut self, id: &str, new_parent: &str, side: Option<Side>) -> bool {
         if id == new_parent {
             return false;
         }
         let Some(node) = self.node(id) else { return false };
         if node.parent_id.is_none() {
-            return false;
-        }
-        let current = node.parent_id.clone();
-        if current.as_deref() == Some(new_parent) {
             return false;
         }
         if self.node(new_parent).is_none() {
@@ -351,8 +352,19 @@ impl MindMap {
         if self.descendant_ids(id).contains(new_parent) {
             return false;
         }
+        let old_parent = node.parent_id.clone();
+        let old_side = node.side;
+        let is_root = Some(new_parent) == self.root_id();
+        let new_side = if is_root { side } else { None };
+        if old_parent.as_deref() == Some(new_parent) && old_side == new_side {
+            return false;
+        }
         if let Some(node) = self.node_mut(id) {
             node.parent_id = Some(new_parent.to_string());
+            node.side = new_side;
+        }
+        if let Some(parent) = self.node_mut(new_parent) {
+            parent.collapsed = None;
         }
         self.touch();
         true
@@ -652,27 +664,47 @@ mod tests {
         assert!(!map.outdent("r"));
     }
 
-    /// Re-parenting takes the subtree along and refuses the moves that would break the tree: making
+    /// Moving a node takes the subtree along and refuses the moves that would break the tree: making
     /// a node its own parent, or moving it under its own descendant (a cycle nobody can repair).
     #[test]
-    fn reparenting_moves_the_subtree_and_refuses_cycles() {
+    fn moving_a_node_moves_the_subtree_and_refuses_cycles() {
         let mut map = map(vec![node("r", None), node("a", Some("r")), node("a1", Some("a")), node("b", Some("r"))]);
-        assert!(map.reparent("a1", "b"));
+        assert!(map.move_to("a1", "b", None));
         assert_eq!(map.node("a1").and_then(|n| n.parent_id.as_deref()), Some("b"));
 
         // Under its own descendant: refused, and nothing moved.
-        assert!(!map.reparent("b", "a1"));
+        assert!(!map.move_to("b", "a1", None));
         assert_eq!(map.node("b").and_then(|n| n.parent_id.as_deref()), Some("r"));
         // Itself, a missing target, the root as the moved node, and the same parent: all no-ops.
-        assert!(!map.reparent("b", "b"));
-        assert!(!map.reparent("b", "fantasma"));
-        assert!(!map.reparent("r", "a"));
-        assert!(!map.reparent("a", "r"));
+        assert!(!map.move_to("b", "b", None));
+        assert!(!map.move_to("b", "fantasma", None));
+        assert!(!map.move_to("r", "a", None));
+        assert!(!map.move_to("a", "r", None));
         // And the subtree follows its node.
-        assert!(map.reparent("a", "b"));
+        assert!(map.move_to("a", "b", None));
         let descendants = map.descendant_ids("a");
         assert!(!descendants.contains("a1"), "a1 moved away earlier");
         assert_eq!(map.node("a").and_then(|n| n.parent_id.as_deref()), Some("b"));
+    }
+
+    /// A move to the root can set the direction in the same step; a move under any other parent
+    /// clears `side`, because the layout only reads it on the root's children.
+    #[test]
+    fn moving_to_the_root_sets_the_side_and_moving_deeper_clears_it() {
+        let mut map = map(vec![node("r", None), node("a", Some("r")), node("a1", Some("a"))]);
+        map.set_side("a", Some(Side::Left));
+        // The same parent, but a new direction: still a change (one undo step).
+        assert!(map.move_to("a", "r", Some(Side::Up)));
+        assert_eq!(map.node("a").and_then(|n| n.side), Some(Side::Up));
+        // The same parent and the same direction changes nothing.
+        assert!(!map.move_to("a", "r", Some(Side::Up)));
+        // A deep node outdented to the root gets the side in one step.
+        assert!(map.move_to("a1", "r", Some(Side::Down)));
+        assert_eq!(map.node("a1").and_then(|n| n.parent_id.as_deref()), Some("r"));
+        assert_eq!(map.node("a1").and_then(|n| n.side), Some(Side::Down));
+        // Moving it under a branch drops the side (the field is meaningless there).
+        assert!(map.move_to("a1", "a", None));
+        assert_eq!(map.node("a1").and_then(|n| n.side), None);
     }
 
     /// The targets a card can be dropped on: everyone but itself and its own subtree.

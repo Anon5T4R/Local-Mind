@@ -3,7 +3,7 @@ use std::path::Path;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use localmind_layout::{layout_tree, node_size};
-use localmind_model::MindMap;
+use localmind_model::{MindMap, Side};
 
 use crate::canvas;
 use crate::doc::Document;
@@ -496,45 +496,28 @@ fn the_view_menu_changes_the_theme() {
     shot(&mut harness, "theme-punkprincess");
 }
 
+/// The root's "+": a click adds a child on that side, selects it and opens its text field.
 #[test]
-fn ctrl_drag_moves_a_card_under_another() {
-    let mut harness = harness();
-    harness.run_steps(3);
-    drag_with_command(&mut harness, "c0ltur4s", "d3b1t0s3");
+fn the_root_hot_corners_add_a_branch_on_each_side() {
+    for side in Side::ALL {
+        let mut harness = harness();
+        harness.run_steps(3);
+        let root = harness.state().doc.root_id().expect("the fixture has a root");
+        let before = harness.state().doc.map.children(&root).len();
+        let pos = corner_pos(&harness, side);
+        click(&mut harness, pos);
 
-    assert_eq!(
-        harness.state().doc.map.node("c0ltur4s").and_then(|n| n.parent_id.as_deref()),
-        Some("d3b1t0s3"),
-        "the card dropped on another becomes its child"
-    );
-    assert!(harness.state().can_undo(), "the move is an undo step");
-    shot(&mut harness, "reparented");
-
-    // Dropping a card on its own descendant is refused: the tree is not cut in two.
-    drag_with_command(&mut harness, "d3b1t0s3", "c0ltur4s");
-    assert_eq!(
-        harness.state().doc.map.node("d3b1t0s3").and_then(|n| n.parent_id.as_deref()),
-        Some("m0n1t0r4"),
-        "a refused drop leaves the node where it was"
-    );
+        let created = harness.state().editing.as_ref().map(|e| e.node.clone()).expect("the new branch opens its text field");
+        let node = harness.state().doc.map.node(&created).expect("the branch exists");
+        assert_eq!(node.parent_id.as_deref(), Some(root.as_str()));
+        assert_eq!(node.side, Some(side), "the branch lands on the side of the button");
+        assert_eq!(harness.state().doc.map.children(&root).len(), before + 1, "one branch per click");
+        shot(&mut harness, &format!("hot-corner-{side:?}").to_lowercase());
+    }
 }
 
-/// A Ctrl+drag from one card to another: press on `from`, move to `to`, release there.
-fn drag_with_command(harness: &mut Harness<'_, Editor>, from: &str, to: &str) {
-    let from = card_center(harness, from);
-    let to = card_center(harness, to);
-    push(harness, egui::Event::PointerMoved(from));
-    harness.run_steps(1);
-    push(harness, egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::COMMAND });
-    harness.run_steps(1);
-    push(harness, egui::Event::PointerMoved(to));
-    harness.run_steps(2);
-    push(harness, egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::COMMAND });
-    harness.run_steps(3);
-}
-
-/// The "move to…" dialog (the keyboard-free re-parent): it opens from the card menu and lists the
-/// parents a node may be moved under.
+/// The "move to…" dialog (the keyboard-free re-parent and direction change): it opens from the card
+/// menu and lists the parents a node may be moved under.
 #[test]
 fn the_move_to_dialog_offers_the_valid_parents() {
     let mut harness = harness();
@@ -551,12 +534,41 @@ fn the_move_to_dialog_offers_the_valid_parents() {
     assert!(!targets.contains(&"c0ltur4s".to_string()), "a card is not a parent of itself");
     shot(&mut harness, "move-to-dialog");
 
-    // The move itself is the same model operation the drop uses (and the dialog's button is a
-    // Window row, which the synthetic click cannot reach - see the lesson in licoes-de-porta).
+    // The move itself is the same model operation the dialog's button runs (the button is a Window
+    // row, which the synthetic click cannot reach - see the lesson in licoes-de-porta).
     let mut harness2 = harness_with(editor());
     harness2.run_steps(2);
-    harness2.state_mut().reparent("c0ltur4s", "d3b1t0s3");
+    harness2.state_mut().move_node_to("c0ltur4s", "d3b1t0s3", None);
     assert_eq!(harness2.state().doc.map.node("c0ltur4s").and_then(|n| n.parent_id.as_deref()), Some("d3b1t0s3"));
+}
+
+/// With the root picked as the parent, the dialog offers a direction; the move lands the branch on it
+/// (outdent + side in one step).
+#[test]
+fn the_move_to_dialog_can_send_a_branch_to_a_side() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    let root = harness.state().doc.root_id().expect("the fixture has a root");
+    harness.state_mut().move_to = Some(edit::MoveTo { node: "c0ltur4s".into(), choice: Some(root.clone()), side: Some(Side::Left) });
+    harness.run_steps(3);
+    shot(&mut harness, "move-to-dialog-side");
+
+    // Apply the same operation the Move button runs.
+    harness.state_mut().move_node_to("c0ltur4s", &root, Some(Side::Left));
+    let node = harness.state().doc.map.node("c0ltur4s").expect("still there");
+    assert_eq!(node.parent_id.as_deref(), Some(root.as_str()), "it is a root child now");
+    assert_eq!(node.side, Some(Side::Left), "on the chosen side");
+}
+
+/// The centre of a root "+" on screen.
+fn corner_pos(harness: &Harness<'_, Editor>, side: Side) -> egui::Pos2 {
+    let state = harness.state();
+    let layout = layout_tree(&state.doc.map.nodes);
+    let root = state.doc.map.root().expect("the fixture has a root");
+    let pos = *layout.positions.get(&root.id).expect("the root is placed");
+    let size = node_size(root);
+    let card = canvas::card_rect(&state.view, state.rect, pos, (size.w, size.h));
+    canvas::corner_center(&state.view, card, side)
 }
 
 /// A click on the minimap moves the view.
@@ -658,11 +670,31 @@ fn a_failing_model_shows_the_reason() {
     harness.run_steps(2);
     harness.get_by_label("Generate").click();
     wait_for(&mut harness, |editor| editor.ai.error.is_some());
+    // The worker result is applied after the strip is drawn (the strip comes before the canvas,
+    // `ai_tick` after it), so the next frame is the one that shows the banner.
+    harness.run_steps(2);
 
     assert_eq!(harness.state().ai.error.as_deref(), Some("invalid API key"));
     // The map is untouched.
     assert_eq!(harness.state().doc.map.title, "Protocolo de sepse");
     shot(&mut harness, "ai-error");
+}
+
+/// A quota error (what a free tier sends, as a 200-with-error-body or a 429) is shown with the
+/// provider's reason, not swallowed: the strip is drawn before the canvas, so it is visible.
+#[test]
+fn a_quota_error_is_shown_with_its_reason() {
+    let reason = "Free usage limit reached. Free models work in OpenCode; subscribe to OpenCode Go to keep going.";
+    let mut harness = harness_with(ai_editor(Err(reason)));
+    harness.run_steps(3);
+    harness.state_mut().ai.generate_topic = Some("Sepse".into());
+    harness.run_steps(2);
+    harness.get_by_label("Generate").click();
+    wait_for(&mut harness, |editor| editor.ai.error.is_some());
+    harness.run_steps(2);
+
+    assert!(harness.state().ai.error.as_deref().unwrap_or_default().contains("Free usage limit"));
+    shot(&mut harness, "ai-quota-error");
 }
 
 /// With no connection at all, the action explains what to do instead of failing silently.

@@ -40,6 +40,8 @@ struct Running {
     partial: String,
     /// Set by the Stop button: the answer is dropped when it arrives.
     cancelled: Arc<AtomicBool>,
+    /// When the worker started, so the strip can show how long the wait has been.
+    started: std::time::Instant,
 }
 
 /// One model list fetch.
@@ -183,6 +185,11 @@ impl Ai {
         self.running.as_ref().map(|running| running.status.as_str())
     }
 
+    /// How long the current request has been running, in seconds (0 when idle).
+    fn elapsed_secs(&self) -> u64 {
+        self.running.as_ref().map(|running| running.started.elapsed().as_secs()).unwrap_or(0)
+    }
+
     /// Whether a connection has a key (the cache is filled when the panel opens).
     pub fn key_of(&self, id: &str) -> bool {
         self.keys.get(id).copied().unwrap_or(false)
@@ -293,7 +300,7 @@ impl Editor {
             })
             .ok();
         self.ai.error = None;
-        self.ai.running = Some(Running { request, rx, status, partial: String::new(), cancelled: cancel });
+        self.ai.running = Some(Running { request, rx, status, partial: String::new(), cancelled: cancel, started: std::time::Instant::now() });
     }
 
     /// Stops showing the answer. The request itself runs to its end in the worker (the shared client
@@ -493,9 +500,9 @@ impl Editor {
     }
 }
 
-/// The AI menus, strip, dialogs and chat. Called by the editor every frame.
+/// The AI menus, dialogs and chat. Called by the editor every frame (the status strip is drawn
+/// before the canvas, so it stays visible).
 pub fn ui(ui: &mut egui::Ui, editor: &mut Editor) {
-    status_strip(ui, editor);
     connections_panel(ui, editor);
     generate_dialog(ui, editor);
     rewrite_dialog(ui, editor);
@@ -548,7 +555,10 @@ pub fn menu(ui: &mut egui::Ui, editor: &mut Editor) {
     });
 }
 
-fn status_strip(ui: &mut egui::Ui, editor: &mut Editor) {
+/// The error banner and the in-flight status. Drawn **before** the canvas (which takes all the
+/// remaining space), otherwise it lands below the canvas and is clipped: the user waits with no
+/// spinner and no error. Called from the editor, once per frame.
+pub(crate) fn status_strip(ui: &mut egui::Ui, editor: &mut Editor) {
     if let Some(error) = editor.ai.error.clone() {
         ui.horizontal_wrapped(|ui| {
             ui.colored_label(ui.visuals().error_fg_color, error);
@@ -558,9 +568,13 @@ fn status_strip(ui: &mut egui::Ui, editor: &mut Editor) {
         });
     }
     let Some(status) = editor.ai.status().map(str::to_string) else { return };
+    let elapsed = editor.ai.elapsed_secs();
     ui.horizontal(|ui| {
         ui.spinner();
         ui.label(status);
+        // The seconds on the strip are the answer to "is it doing anything?"; without them a slow
+        // model is indistinguishable from a hang.
+        ui.label(egui::RichText::new(format!("{elapsed}s")).weak());
         let tail = editor.ai.partial().chars().rev().take(80).collect::<String>().chars().rev().collect::<String>();
         if !tail.trim().is_empty() {
             ui.label(egui::RichText::new(tail.replace('\n', " ")).weak());
@@ -569,6 +583,9 @@ fn status_strip(ui: &mut egui::Ui, editor: &mut Editor) {
             editor.ai_cancel();
         }
     });
+    if elapsed >= 15 {
+        ui.label(egui::RichText::new(crate::tl!("The model is taking a while…")).weak());
+    }
 }
 
 fn connections_panel(ui: &mut egui::Ui, editor: &mut Editor) {

@@ -8,7 +8,9 @@
 
 use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use localmind_layout::{Layout, ResolvedSide, font_of, layout_tree, node_size, width_of};
-use localmind_model::{MAX_WIDTH, MIN_WIDTH, MindMap, MindNode};
+use localmind_model::{MAX_WIDTH, MIN_WIDTH, MindMap, MindNode, Side};
+
+use crate::tl;
 
 /// Zoom limits, as the original app's canvas had them.
 pub const MIN_ZOOM: f32 = 0.2;
@@ -26,6 +28,12 @@ const BADGE_RADIUS: f32 = 8.0;
 /// Side of the width handle on the selected card, in layout units (before the zoom).
 const HANDLE_SIDE: f32 = 14.0;
 
+/// Radius of the root's "+" buttons, in layout units (a 20 px circle).
+const CORNER_RADIUS: f32 = 10.0;
+/// Distance from a card edge to the centre of its "+", in layout units. The button's outer edge
+/// sits 26 px from the card, as in the original app.
+const CORNER_GAP: f32 = 16.0;
+
 /// The view over the map: where the canvas is panned to, how much it is zoomed, and the width drag
 /// in progress.
 #[derive(Clone, Debug)]
@@ -37,11 +45,6 @@ pub struct CanvasView {
     pub needs_fit: bool,
     /// The width drag happening right now, if any.
     pub resizing: Option<Resize>,
-    /// The card being dragged with Ctrl held (a re-parent in progress).
-    pub reparenting: Option<String>,
-    /// Where a Ctrl+press landed: the drag that may follow is a re-parent. The modifier is read on
-    /// the press, because by the time egui calls it a drag the events carrying it are gone.
-    pub arm_reparent: Option<Pos2>,
 }
 
 /// A width drag on the selected card: where it started and from which width.
@@ -54,7 +57,7 @@ pub struct Resize {
 
 impl Default for CanvasView {
     fn default() -> Self {
-        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true, resizing: None, reparenting: None, arm_reparent: None }
+        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true, resizing: None }
     }
 }
 
@@ -120,6 +123,41 @@ pub fn handle_rect(view: &CanvasView, card: Rect) -> Rect {
     Rect::from_min_max(pos2(card.right() - side, card.bottom() - side), card.max)
 }
 
+/// Radius of a root "+" on screen (a 20 px circle at 1x).
+pub fn corner_radius(view: &CanvasView) -> f32 {
+    (CORNER_RADIUS * view.zoom).clamp(3.0, 11.0)
+}
+
+fn corner_gap(view: &CanvasView) -> f32 {
+    (CORNER_GAP * view.zoom).clamp(4.0, 20.0)
+}
+
+/// The centre of the root's "+" for `side`: just outside that edge of the card.
+pub fn corner_center(view: &CanvasView, card: Rect, side: Side) -> Pos2 {
+    let gap = corner_gap(view);
+    match side {
+        Side::Up => pos2(card.center().x, card.top() - gap),
+        Side::Down => pos2(card.center().x, card.bottom() + gap),
+        Side::Left => pos2(card.left() - gap, card.center().y),
+        Side::Right => pos2(card.right() + gap, card.center().y),
+    }
+}
+
+/// The root's card, when it has a place on the canvas.
+fn root_card(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect) -> Option<Rect> {
+    let root = map.root()?;
+    let pos = layout.positions.get(&root.id)?;
+    let size = node_size(root);
+    Some(card_rect(view, rect, *pos, (size.w, size.h)))
+}
+
+/// The root's "+" under `pointer`, if any.
+pub fn corner_at(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, pointer: Pos2) -> Option<Side> {
+    let card = root_card(map, layout, view, rect)?;
+    let radius = corner_radius(view) + 2.0;
+    Side::ALL.iter().copied().find(|side| corner_center(view, card, *side).distance(pointer) <= radius)
+}
+
 /// The card under `pointer`, if any.
 pub fn hit_test(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, pointer: Pos2) -> Option<String> {
     let hidden = map.hidden_ids();
@@ -170,8 +208,8 @@ pub struct CanvasOutput {
     pub width: Option<(String, f32)>,
     /// The width drag ended this frame.
     pub width_finished: bool,
-    /// A Ctrl+drag dropped `node` on `target`: re-parent it. Only emitted for a valid target.
-    pub reparent: Option<(String, String)>,
+    /// One of the root's "+" buttons was clicked: add a branch on that side.
+    pub hot_corner: Option<Side>,
 }
 
 impl Default for CanvasOutput {
@@ -185,7 +223,7 @@ impl Default for CanvasOutput {
             context_menu: None,
             width: None,
             width_finished: false,
-            reparent: None,
+            hot_corner: None,
         }
     }
 }
@@ -203,10 +241,33 @@ pub fn show(
     let mut out = CanvasOutput { rect, ..Default::default() };
 
     let layout = layout_tree(&map.nodes);
-    interact(ui, &response, rect, map, view, &layout, selected, pointer_over_minimap(rect, ui.input(|i| i.pointer.interact_pos())), &mut out);
+    interact(
+        ui,
+        &response,
+        rect,
+        map,
+        view,
+        &layout,
+        selected,
+        editing,
+        pointer_over_minimap(rect, ui.input(|i| i.pointer.interact_pos())),
+        &mut out,
+    );
 
     paint(&ui.painter_at(rect), map, &layout, view, rect, selected, editing, colors);
-    reparent_overlay(&ui.painter_at(rect), map, &layout, view, rect, ui.input(|i| i.pointer.hover_pos()), colors);
+    hot_corners(&ui.painter_at(rect), map, &layout, view, rect, colors, ui.input(|i| i.pointer.hover_pos()), editing);
+    // The "+" are painted shapes, not widgets, so their tooltip is opened by hand at the pointer.
+    if !editing.is_some_and(|id| map.root_id() == Some(id))
+        && let Some(side) = ui.input(|i| i.pointer.hover_pos()).and_then(|p| corner_at(map, &layout, view, rect, p))
+    {
+        egui::Tooltip::always_open(
+            ui.ctx().clone(),
+            ui.layer_id(),
+            ui.make_persistent_id(("hot-corner-tip", side as u8)),
+            egui::PopupAnchor::Pointer,
+        )
+        .show(|ui| ui.label(corner_label(side)));
+    }
     minimap(ui, rect, map, &layout, view, colors);
     hover_cursor(ui, &response, map, &layout, view, rect, selected);
     out
@@ -255,10 +316,14 @@ fn interact(
     view: &mut CanvasView,
     layout: &Layout,
     selected: Option<&str>,
+    editing: Option<&str>,
     over_minimap: bool,
     out: &mut CanvasOutput,
 ) {
     let pointer = ui.input(|i| i.pointer.interact_pos());
+    // The root's "+" buttons: inert while the root's own text field is open, so a click there is
+    // the field's, not a new branch's.
+    let hot = if editing.is_some_and(|id| map.root_id() == Some(id)) { None } else { pointer.and_then(|p| corner_at(map, layout, view, rect, p)) };
 
     if response.hovered() && !over_minimap {
         let (scroll, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
@@ -290,41 +355,6 @@ fn interact(
         }
     }
 
-    // Ctrl+drag moves a card under another one (a re-parent). It is checked before the pan so the
-    // two never fight over the same gesture. The Ctrl is read on the press: when egui reports the
-    // drag, the events that carried the modifier are already gone.
-    let press_with_command = ui.input(|i| {
-        i.events
-            .iter()
-            .any(|event| matches!(event, egui::Event::PointerButton { pressed: true, modifiers, .. } if modifiers.command || modifiers.ctrl))
-    });
-    if press_with_command && let Some(pressed_at) = ui.input(|i| i.pointer.press_origin()) {
-        view.arm_reparent = Some(pressed_at);
-    }
-    if response.drag_started()
-        && let Some(pressed_at) = view.arm_reparent.take()
-        && let Some(node) = hit_test(map, layout, view, rect, pressed_at)
-        && map.node(&node).is_some_and(|node| node.parent_id.is_some())
-    {
-        view.reparenting = Some(node);
-    }
-    if !response.is_pointer_button_down_on() {
-        view.arm_reparent = None;
-    }
-    if let Some(node) = view.reparenting.clone() {
-        if response.drag_stopped() {
-            if let Some(pointer) = pointer
-                && let Some(target) = hit_test(map, layout, view, rect, pointer)
-                && map.reparent_targets(&node).contains(&target)
-            {
-                out.reparent = Some((node, target));
-            }
-            view.reparenting = None;
-        }
-        // The drag belongs to the re-parent: the canvas does not pan under it.
-        return;
-    }
-
     if let Some(resize) = view.resizing.clone() {
         if response.dragged() {
             if let Some(pointer) = pointer {
@@ -335,7 +365,7 @@ fn interact(
             view.resizing = None;
             out.width_finished = true;
         }
-    } else if response.dragged() && !over_minimap {
+    } else if response.dragged() && !over_minimap && hot.is_none() {
         view.pan += response.drag_delta();
     }
 
@@ -344,6 +374,14 @@ fn interact(
         return;
     }
     let Some(pointer) = pointer else { return };
+    // The root's "+" buttons come before the cards and the empty canvas: a click there adds a
+    // branch on that side, and does nothing else.
+    if let Some(side) = hot {
+        if response.clicked() {
+            out.hot_corner = Some(side);
+        }
+        return;
+    }
     if response.clicked() {
         if let Some(id) = badge_at(map, layout, view, rect, pointer) {
             out.badge_clicked = Some(id);
@@ -386,6 +424,7 @@ fn hover_cursor(ui: &Ui, response: &egui::Response, map: &MindMap, layout: &Layo
         None
     };
     let cursor = cursor.or_else(|| badge_at(map, layout, view, rect, pointer).map(|_| egui::CursorIcon::PointingHand));
+    let cursor = cursor.or_else(|| corner_at(map, layout, view, rect, pointer).map(|_| egui::CursorIcon::PointingHand));
     let cursor = cursor.or_else(|| hit_test(map, layout, view, rect, pointer).map(|_| egui::CursorIcon::PointingHand));
     let cursor = cursor.or(Some(egui::CursorIcon::Grab));
     if let Some(cursor) = cursor {
@@ -550,35 +589,66 @@ fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut Can
     }
 }
 
-/// While Ctrl+dragging a card: the card being moved, the target under the pointer and the link
-/// between them, so the drop is visible before it happens.
-fn reparent_overlay(
+/// The root's four "+" buttons, drawn just outside its card: the fast way to add a branch on a
+/// direction. They are screen chrome, not part of the map, so the PNG export (which calls
+/// [`paint`]) never draws them.
+#[allow(clippy::too_many_arguments)]
+fn hot_corners(
     painter: &egui::Painter,
     map: &MindMap,
     layout: &Layout,
     view: &CanvasView,
     rect: Rect,
-    pointer: Option<Pos2>,
     colors: &crate::theme::Colors,
+    pointer: Option<Pos2>,
+    editing: Option<&str>,
 ) {
-    let Some(node_id) = view.reparenting.as_deref() else { return };
-    let Some(node) = map.node(node_id) else { return };
-    let Some(pos) = layout.positions.get(node_id) else { return };
-    let size = node_size(node);
-    let card = card_rect(view, rect, *pos, (size.w, size.h));
-    painter.rect_stroke(card, CornerRadius::same(8), Stroke::new(2.0, colors.accent), StrokeKind::Inside);
-
-    let Some(pointer) = pointer else { return };
-    let Some(target) = hit_test(map, layout, view, rect, pointer) else { return };
-    if !map.reparent_targets(node_id).contains(&target) {
+    if editing.is_some_and(|id| map.root_id() == Some(id)) {
         return;
     }
-    let Some(target_node) = map.node(&target) else { return };
-    let Some(target_pos) = layout.positions.get(&target) else { return };
-    let target_size = node_size(target_node);
-    let target_card = card_rect(view, rect, *target_pos, (target_size.w, target_size.h));
-    painter.rect_stroke(target_card, CornerRadius::same(8), Stroke::new(2.5, colors.accent), StrokeKind::Inside);
-    painter.line_segment([card.center(), target_card.center()], Stroke::new(1.5, colors.accent));
+    let Some(card) = root_card(map, layout, view, rect) else { return };
+    let radius = corner_radius(view);
+    let hovered = pointer.and_then(|p| corner_at(map, layout, view, rect, p));
+    for side in Side::ALL {
+        let center = corner_center(view, card, side);
+        let hot = hovered == Some(side);
+        let fill = if hot { colors.accent } else { colors.surface };
+        painter.circle_filled(center, radius, fill);
+        dashed_circle(painter, center, radius, colors.accent, (view.zoom).clamp(0.5, 1.5));
+        let arm = radius * 0.45;
+        let ink = if hot { colors.canvas } else { colors.accent };
+        let stroke = Stroke::new((1.5 * view.zoom).clamp(1.0, 2.5), ink);
+        painter.line_segment([pos2(center.x - arm, center.y), pos2(center.x + arm, center.y)], stroke);
+        painter.line_segment([pos2(center.x, center.y - arm), pos2(center.x, center.y + arm)], stroke);
+    }
+}
+
+/// A dashed circle: `dashes` short arcs with gaps, which is how the original app's "+" buttons were
+/// outlined. egui has no dashed stroke, so the arcs are drawn as short polylines.
+fn dashed_circle(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, width: f32) {
+    let dashes = 12;
+    let stroke = Stroke::new(width, color);
+    let step = std::f32::consts::TAU / dashes as f32;
+    for i in 0..dashes {
+        let start = i as f32 * step;
+        let end = start + step * 0.55;
+        let mut points = Vec::with_capacity(4);
+        for n in 0..=3 {
+            let angle = start + (end - start) * (n as f32 / 3.0);
+            points.push(center + vec2(angle.cos() * radius, angle.sin() * radius));
+        }
+        painter.add(egui::Shape::line(points, stroke));
+    }
+}
+
+/// What a root "+" creates, in the words of the original app's tooltips.
+fn corner_label(side: Side) -> &'static str {
+    match side {
+        Side::Up => tl!("New branch above"),
+        Side::Down => tl!("New branch below"),
+        Side::Left => tl!("New branch to the left"),
+        Side::Right => tl!("New branch to the right"),
+    }
 }
 
 /// The links, drawn under the cards: a cubic curve from the parent's centre to the child's, with
@@ -816,7 +886,7 @@ mod tests {
     fn the_hit_test_follows_pan_and_zoom() {
         let map = MindMap::new("t", "central");
         let root = map.root_id().map(str::to_string).unwrap_or_default();
-        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false, resizing: None, reparenting: None, arm_reparent: None };
+        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false, resizing: None };
         let layout = layout_tree(&map.nodes);
         let canvas = rect();
         let node = map.node(&root).expect("root");
@@ -885,7 +955,7 @@ mod tests {
     #[test]
     fn the_world_view_matches_the_mapping() {
         let canvas = rect();
-        let view = CanvasView { zoom: 1.5, pan: vec2(30.0, -20.0), needs_fit: false, resizing: None, reparenting: None, arm_reparent: None };
+        let view = CanvasView { zoom: 1.5, pan: vec2(30.0, -20.0), needs_fit: false, resizing: None };
         let world = world_view(&view, canvas);
         let screen = card_rect(&view, canvas, localmind_layout::Pos { x: world.center().x, y: world.center().y }, (0.0, 0.0)).min;
         assert!((screen.x - canvas.center().x).abs() < 0.01);
