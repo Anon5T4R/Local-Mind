@@ -183,36 +183,57 @@ impl Default for CanvasOutput {
 }
 
 /// Draws the map and turns pointer input into [`CanvasOutput`].
-pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<&str>, editing: Option<&str>) -> CanvasOutput {
+pub fn show(
+    ui: &mut Ui,
+    map: &MindMap,
+    view: &mut CanvasView,
+    selected: Option<&str>,
+    editing: Option<&str>,
+    colors: &crate::theme::Colors,
+) -> CanvasOutput {
     let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
     let mut out = CanvasOutput { rect, ..Default::default() };
 
-    let palette = Palette::from(&ui.visuals().clone());
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, palette.canvas);
-
     let layout = layout_tree(&map.nodes);
+    interact(ui, &response, rect, map, view, &layout, selected, pointer_over_minimap(rect, ui.input(|i| i.pointer.interact_pos())), &mut out);
+
+    paint(&ui.painter_at(rect), map, &layout, view, rect, selected, editing, colors);
+    minimap(ui, rect, map, &layout, view, colors);
+    hover_cursor(ui, &response, map, &layout, view, rect, selected);
+    out
+}
+
+/// The map on a painter: background, grid, links and cards. Shared by the window and the PNG export,
+/// so what the user sees and what the file holds come from the same code.
+#[allow(clippy::too_many_arguments)]
+pub fn paint(
+    painter: &egui::Painter,
+    map: &MindMap,
+    layout: &Layout,
+    view: &CanvasView,
+    rect: Rect,
+    selected: Option<&str>,
+    editing: Option<&str>,
+    colors: &crate::theme::Colors,
+) {
+    let palette = Palette::from(colors);
+    painter.rect_filled(rect, CornerRadius::ZERO, palette.canvas);
+
     let origin = view.origin(rect);
     let hidden = map.hidden_ids();
     let by_id: std::collections::HashMap<&str, &MindNode> = map.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let visible = |node: &&MindNode| !hidden.contains(&node.id);
 
-    interact(ui, &response, rect, map, view, &layout, selected, &mut out);
+    dots(painter, rect, view, origin, &palette);
+    edges(painter, map, layout, &by_id, &hidden, view, origin, &palette);
 
-    let painter = ui.painter_at(rect);
-    dots(&painter, rect, view, origin, &palette);
-    edges(&painter, map, &layout, &by_id, &hidden, view, origin, &palette);
-
-    for node in map.nodes.iter().filter(visible) {
+    for node in map.nodes.iter().filter(|node| !hidden.contains(&node.id)) {
         let Some(pos) = layout.positions.get(&node.id) else { continue };
         let size = node_size(node);
         let card = card_rect(view, rect, *pos, (size.w, size.h));
         let is_selected = selected == Some(node.id.as_str());
         let is_editing = editing == Some(node.id.as_str());
-        draw_card(&painter, card, node, view, &palette, is_selected, map, is_editing);
+        draw_card(painter, card, node, view, &palette, is_selected, map, is_editing);
     }
-
-    hover_cursor(ui, &response, map, &layout, view, rect, selected);
-    out
 }
 
 /// Zoom, pan, width drag and clicks.
@@ -225,11 +246,12 @@ fn interact(
     view: &mut CanvasView,
     layout: &Layout,
     selected: Option<&str>,
+    over_minimap: bool,
     out: &mut CanvasOutput,
 ) {
     let pointer = ui.input(|i| i.pointer.interact_pos());
 
-    if response.hovered() {
+    if response.hovered() && !over_minimap {
         let (scroll, pinch) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
         if let Some(pointer) = pointer {
             if scroll.abs() > 0.0 {
@@ -269,10 +291,14 @@ fn interact(
             view.resizing = None;
             out.width_finished = true;
         }
-    } else if response.dragged() {
+    } else if response.dragged() && !over_minimap {
         view.pan += response.drag_delta();
     }
 
+    // The minimap handles its own clicks and drags (it is drawn on top of the canvas).
+    if over_minimap {
+        return;
+    }
     let Some(pointer) = pointer else { return };
     if response.clicked() {
         if let Some(id) = badge_at(map, layout, view, rect, pointer) {
@@ -335,24 +361,26 @@ struct Palette {
     accent_second: Color32,
     selection: Color32,
     note: Color32,
+    dots: Color32,
 }
 
-impl From<&egui::Visuals> for Palette {
-    fn from(visuals: &egui::Visuals) -> Self {
-        let accent = visuals.selection.bg_fill;
-        let card = visuals.widgets.inactive.bg_fill;
+impl From<&crate::theme::Colors> for Palette {
+    fn from(colors: &crate::theme::Colors) -> Self {
+        let accent = colors.accent;
+        let card = colors.panel;
         Self {
-            canvas: visuals.extreme_bg_color,
+            canvas: colors.canvas,
             card,
             // The root is the map's centre: same card, tinted towards the accent, so it reads as the
             // trunk at a glance without inventing a second palette.
             card_root: card.lerp_to_gamma(accent, 0.18),
-            text: visuals.text_color(),
-            edge: visuals.widgets.noninteractive.bg_stroke.color,
+            text: colors.text,
+            edge: colors.border,
             accent,
-            accent_second: visuals.hyperlink_color,
+            accent_second: colors.accent_second,
             selection: accent,
-            note: visuals.warn_fg_color,
+            note: colors.accent_second,
+            dots: colors.dots,
         }
     }
 }
@@ -366,7 +394,7 @@ fn dots(painter: &egui::Painter, rect: Rect, view: &CanvasView, origin: Pos2, pa
     if step < 6.0 {
         return;
     }
-    let color = palette.edge.gamma_multiply(0.35);
+    let color = palette.dots;
     let start_x = origin.x - ((origin.x - rect.left()) / step).floor() * step;
     let start_y = origin.y - ((origin.y - rect.top()) / step).floor() * step;
     let mut painted = 0usize;
@@ -385,9 +413,101 @@ fn dots(painter: &egui::Painter, rect: Rect, view: &CanvasView, origin: Pos2, pa
     }
 }
 
+/// Size and margin of the minimap, in screen pixels.
+const MINIMAP_SIZE: Vec2 = vec2(184.0, 124.0);
+/// Distance from the canvas corner.
+const MINIMAP_MARGIN: f32 = 12.0;
+
+/// The minimap rectangle (bottom-right corner), or `None` when the canvas is too small for one.
+pub fn minimap_rect(canvas: Rect) -> Option<Rect> {
+    if canvas.width() < 2.0 * MINIMAP_SIZE.x + 40.0 || canvas.height() < 2.0 * MINIMAP_SIZE.y + 40.0 {
+        return None;
+    }
+    let min = pos2(canvas.right() - MINIMAP_MARGIN - MINIMAP_SIZE.x, canvas.bottom() - MINIMAP_MARGIN - MINIMAP_SIZE.y);
+    Some(Rect::from_min_size(min, MINIMAP_SIZE))
+}
+
+/// Whether the pointer is over the minimap (the canvas must not act on those clicks).
+pub fn pointer_over_minimap(canvas: Rect, pointer: Option<Pos2>) -> bool {
+    matches!((minimap_rect(canvas), pointer), (Some(rect), Some(point)) if rect.contains(point))
+}
+
+/// The slice of layout space the canvas is showing right now.
+pub fn world_view(view: &CanvasView, canvas: Rect) -> Rect {
+    let top_left = (canvas.left_top() - canvas.center() - view.pan) / view.zoom;
+    let bottom_right = (canvas.right_bottom() - canvas.center() - view.pan) / view.zoom;
+    Rect::from_min_max(pos2(top_left.x, top_left.y), pos2(bottom_right.x, bottom_right.y))
+}
+
+/// How the minimap maps layout space to its own box: the map and the viewport together, centred.
+pub struct MinimapFit {
+    origin: Pos2,
+    scale: f32,
+}
+
+impl MinimapFit {
+    pub fn new(rect: Rect, map: Rect, viewport: Rect) -> Self {
+        let world = map.union(viewport);
+        let inner = rect.shrink(6.0);
+        let scale = (inner.width() / world.width().max(1.0)).min(inner.height() / world.height().max(1.0)).max(0.0001);
+        let origin = rect.center() - world.center().to_vec2() * scale;
+        Self { origin, scale }
+    }
+
+    fn to_minimap(&self, point: Pos2) -> Pos2 {
+        self.origin + point.to_vec2() * self.scale
+    }
+
+    fn to_world(&self, point: Pos2) -> Pos2 {
+        ((point - self.origin) / self.scale).to_pos2()
+    }
+}
+
+/// The minimap: the whole map, the viewport and a click/drag that moves the view.
+fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut CanvasView, colors: &crate::theme::Colors) {
+    let Some(rect) = minimap_rect(canvas) else { return };
+    let Some((map_min, map_size)) = layout.bounds(&map.nodes) else { return };
+    let map_rect = Rect::from_min_size(pos2(map_min.x, map_min.y), vec2(map_size.w, map_size.h));
+    let viewport = world_view(view, canvas);
+    let fit = MinimapFit::new(rect, map_rect, viewport);
+
+    let painter = ui.painter_at(rect);
+    painter.rect(rect, CornerRadius::same(8), colors.surface, Stroke::new(1.0, colors.border), StrokeKind::Inside);
+
+    for node in map.nodes.iter() {
+        let Some(pos) = layout.positions.get(&node.id) else { continue };
+        let size = node_size(node);
+        let place = Rect::from_min_size(fit.to_minimap(pos2(pos.x, pos.y)), vec2(size.w, size.h) * fit.scale);
+        let place = Rect::from_min_size(place.min, place.size().max(vec2(2.0, 2.0)));
+        painter.rect_filled(place, CornerRadius::same(1), colors.minimap_node);
+    }
+
+    // What is outside the viewport is dimmed, so the minimap says where you are.
+    let seen = Rect::from_min_size(fit.to_minimap(viewport.min), viewport.size() * fit.scale).intersect(rect);
+    if seen.is_positive() {
+        let mask = colors.minimap_mask;
+        painter.rect_filled(Rect::from_min_max(rect.min, pos2(rect.right(), seen.top())), CornerRadius::ZERO, mask);
+        painter.rect_filled(Rect::from_min_max(pos2(rect.left(), seen.bottom()), rect.max), CornerRadius::ZERO, mask);
+        painter.rect_filled(Rect::from_min_max(pos2(rect.left(), seen.top()), pos2(seen.left(), seen.bottom())), CornerRadius::ZERO, mask);
+        painter.rect_filled(Rect::from_min_max(pos2(seen.right(), seen.top()), pos2(rect.right(), seen.bottom())), CornerRadius::ZERO, mask);
+        painter.rect_stroke(seen, CornerRadius::ZERO, Stroke::new(1.0, colors.accent), StrokeKind::Inside);
+    }
+
+    let response = ui.interact(rect, ui.make_persistent_id("localmind-minimap"), Sense::click_and_drag());
+    if (response.clicked() || response.dragged())
+        && let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
+    {
+        // Centre the canvas on the layout point that was clicked.
+        let target = fit.to_world(pointer);
+        view.pan = -target.to_vec2() * view.zoom;
+    }
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+}
+
 /// The links, drawn under the cards: a cubic curve from the parent's centre to the child's, with
-/// the control points halfway along the depth axis (what the original app drew).
-#[allow(clippy::too_many_arguments)]
+/// the control points halfway along the depth axis (what the original app drew).#[allow(clippy::too_many_arguments)]
 fn edges(
     painter: &egui::Painter,
     map: &MindMap,
@@ -667,5 +787,44 @@ mod tests {
         assert!(card.contains_rect(handle));
         assert_eq!(handle.max, card.max);
         assert!(!handle.contains(card.center()));
+    }
+
+    /// The minimap maps layout space onto its own box and back: the click that moves the view relies
+    /// on the inverse.
+    #[test]
+    fn the_minimap_fit_maps_layout_space_both_ways() {
+        let minimap = Rect::from_min_size(pos2(900.0, 600.0), vec2(184.0, 124.0));
+        let map = Rect::from_min_size(pos2(-300.0, -200.0), vec2(600.0, 400.0));
+        let viewport = Rect::from_min_size(pos2(-100.0, -50.0), vec2(200.0, 100.0));
+        let fit = MinimapFit::new(minimap, map, viewport);
+        for point in [map.min, map.center(), map.max, viewport.center()] {
+            let there = fit.to_minimap(point);
+            let back = fit.to_world(there);
+            assert!((back.x - point.x).abs() < 0.01, "{point:?} -> {back:?}");
+            assert!((back.y - point.y).abs() < 0.01, "{point:?} -> {back:?}");
+            assert!(minimap.expand(2.0).contains(there), "{point:?} maps outside the minimap: {there:?}");
+        }
+    }
+
+    /// The slice of layout space the canvas shows is the inverse of its own transform.
+    #[test]
+    fn the_world_view_matches_the_mapping() {
+        let canvas = rect();
+        let view = CanvasView { zoom: 1.5, pan: vec2(30.0, -20.0), needs_fit: false, resizing: None };
+        let world = world_view(&view, canvas);
+        let screen = card_rect(&view, canvas, localmind_layout::Pos { x: world.center().x, y: world.center().y }, (0.0, 0.0)).min;
+        assert!((screen.x - canvas.center().x).abs() < 0.01);
+        assert!((screen.y - canvas.center().y).abs() < 0.01);
+    }
+
+    /// A canvas too small for the minimap simply has none, and clicks there are canvas clicks.
+    #[test]
+    fn a_small_canvas_has_no_minimap() {
+        let small = Rect::from_min_size(pos2(0.0, 0.0), vec2(300.0, 200.0));
+        assert!(minimap_rect(small).is_none());
+        assert!(!pointer_over_minimap(small, Some(small.center())));
+        let big = rect();
+        assert!(minimap_rect(big).is_some());
+        assert!(pointer_over_minimap(big, minimap_rect(big).map(|r| r.center())));
     }
 }

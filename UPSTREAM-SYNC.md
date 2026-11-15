@@ -20,7 +20,7 @@ virou a suíte deste app em `crates/localmind-*`.
 |---|---|---|
 | F1 (v0.1.0) | nascimento, modelo, layout, `.tmind` (abrir/salvar/salvar como), canvas com pan/zoom/fit/seleção, associação de arquivo, i18n, ícone | **concluída e publicada** (8 assets assinados) |
 | F2 (v0.2.0) | edição: texto inline (guarda de IME), filho/irmão, excluir, colapsar, desfazer/refazer, indentar/desindentar/mover, menu de contexto, largura por arrasto, nota editável | **concluída e publicada** (16 testes de UI no kittest) |
-| F3 | estilos (cor, fonte, lado), temas nomeados, minimapa, export Markdown/HTML/PNG | pendente |
+| F3 (v0.3.0) | estilos por nó (cor/tinta, fonte, lado), 6 temas nomeados, minimapa, export Markdown/HTML/SVG/PNG | **concluída e publicada** |
 | F4 | IA remota (BYOK via `local-ai`): gerar mapa, expandir, expandir fundo, explicar, reescrever, chat | pendente |
 | F5 (v1.0.0) | paridade e polimento: tabela final, fixture de `.tmind` real, Ajuda, docs | pendente |
 
@@ -37,8 +37,9 @@ virou a suíte deste app em `crates/localmind-*`.
   escrever nele (`setNote` nunca é chamado pela UI). Aqui a nota é editável — melhoria pedida, não
   paridade.
 - **Arrastar um arquivo para a janela** abre o mapa (o antigo só abria por diálogo/argv).
-- **Temas:** o antigo tem 6 temas por variáveis CSS; a fase F3 mapeia para os tokens do craft (a
-  aparência não é copiada, o conjunto de climas é).
+- **Temas:** o antigo tem 6 temas por variáveis CSS; aqui as **paletas são as mesmas** (`--bg`, `--panel`, `--accent`, `--canvas-dots`, `--minimap-*` viram os campos de `theme::Colors`) e mudam a janela inteira, o canvas e o minimapa. Diferente do antigo: a escolha fica no `prefs.json` e no menu **View → Theme** (o antigo escondia nas Configurações).
+- **Export:** Markdown, HTML, **SVG** e **PNG**. O SVG é acréscimo nosso (vetor, sem rasterizador). O PNG é renderizado pelo **mesmo desenho da tela** (contexto egui off-screen → malhas do epaint → preenchimento em software aqui, com o atlas de fonte), em 2× e comprimido com `miniz_oxide` (Rust puro, já no grafo via `zip`/`flate2`; compressão com nível 6, ~65 KB para um mapa típico). Não há lib de rasterização envolvida.
+- **Minimapa** no canto inferior direito: o mapa inteiro, o retângulo do viewport e clique/arrasto que move a vista (o antigo tinha o mesmo, do ReactFlow).
 - **Single-instance** não foi trazido: hoje cada arquivo aberto pela associação abre uma janela
   própria. O antigo reaproveitava a janela existente (`second-instance`); entra se incomodar.
 

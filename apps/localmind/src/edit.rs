@@ -19,6 +19,7 @@ use localmind_model::{History, MAX_FONT, MIN_FONT, MindMap, Side};
 
 use crate::canvas::{self, CanvasView};
 use crate::doc::Document;
+use crate::theme::Theme;
 use crate::tl;
 
 /// The colours the node menu offers: the same six the original app had.
@@ -30,6 +31,7 @@ const FONT_STEP: f32 = 2.0;
 pub struct Editor {
     pub doc: Document,
     pub view: CanvasView,
+    pub theme: Theme,
     pub selected: Option<String>,
     pub editing: Option<Editing>,
     pub menu: Option<MenuState>,
@@ -70,6 +72,7 @@ impl Editor {
         Self {
             doc,
             view: CanvasView::default(),
+            theme: Theme::default(),
             selected,
             editing: None,
             menu: None,
@@ -77,6 +80,36 @@ impl Editor {
             rect: Rect::NOTHING,
             history: History::default(),
             resizing: false,
+        }
+    }
+
+    /// The colours the canvas paints with (the window's menus read them from egui's style).
+    pub fn colors(&self) -> crate::theme::Colors {
+        self.theme.colors()
+    }
+
+    /// Changes the theme. The caller applies it to the egui context and saves the preference; the
+    /// canvas follows on the next frame because it reads [`Self::colors`] every frame.
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+    }
+
+    /// The map in the export format `kind`, as text (the formats that are text).
+    pub fn exported(&self, kind: ExportKind) -> String {
+        match kind {
+            ExportKind::Markdown => crate::export::markdown(&self.doc.map),
+            ExportKind::Html => crate::export::html(&self.doc.map, &self.colors(), crate::i18n::code()),
+            ExportKind::Svg => crate::export::svg(&self.doc.map, &self.colors()),
+            // PNG is bytes, not text: see `export`.
+            ExportKind::Png => String::new(),
+        }
+    }
+
+    /// The map in the export format `kind`, as the bytes the file gets.
+    pub fn export(&self, kind: ExportKind) -> Result<Vec<u8>, String> {
+        match kind {
+            ExportKind::Png => crate::png::render(&self.doc.map, &self.colors()),
+            other => Ok(self.exported(other).into_bytes()),
         }
     }
 
@@ -366,7 +399,7 @@ impl Editor {
         // and the commit has to see the Enter of the frame it happened in.
         let keys = KeysThisFrame::read(ui.ctx());
         let editing = self.editing.as_ref().map(|e| e.node.clone());
-        let out = canvas::show(ui, &self.doc.map, &mut self.view, self.selected.as_deref(), editing.as_deref());
+        let out = canvas::show(ui, &self.doc.map, &mut self.view, self.selected.as_deref(), editing.as_deref(), &self.theme.colors());
         self.rect = out.rect;
         self.apply(out);
         // The field goes before the keyboard so the frame that commits is the frame that typed -
@@ -735,6 +768,113 @@ impl Editor {
     }
 }
 
+/// The export formats the app writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportKind {
+    Markdown,
+    Html,
+    Svg,
+    Png,
+}
+
+impl ExportKind {
+    pub const ALL: [ExportKind; 4] = [ExportKind::Markdown, ExportKind::Html, ExportKind::Svg, ExportKind::Png];
+
+    /// The file extension, without the dot.
+    pub fn extension(self) -> &'static str {
+        match self {
+            ExportKind::Markdown => "md",
+            ExportKind::Html => "html",
+            ExportKind::Svg => "svg",
+            ExportKind::Png => "png",
+        }
+    }
+
+    /// The menu label (English source, translated by the caller).
+    pub fn label(self) -> &'static str {
+        match self {
+            ExportKind::Markdown => "Markdown",
+            ExportKind::Html => "HTML",
+            ExportKind::Svg => "SVG",
+            ExportKind::Png => "PNG",
+        }
+    }
+}
+
+/// The Edit and View menus, shared by the window and the headless tests (they only touch the
+/// editor). Returns the theme the user picked, so the caller can apply and save it.
+pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<Theme> {
+    let mut chosen = None;
+    ui.menu_button(tl!("Edit"), |ui| {
+        if ui.add_enabled(editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
+            editor.undo();
+            ui.close();
+        }
+        if ui.add_enabled(editor.can_redo(), egui::Button::new(tl!("Redo"))).clicked() {
+            editor.redo();
+            ui.close();
+        }
+        ui.separator();
+        let selected = editor.selected.clone();
+        let has_selection = selected.is_some();
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("Edit text"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.begin_edit(id);
+            ui.close();
+        }
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("New child"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.add_child(id);
+            ui.close();
+        }
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("New sibling"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.add_sibling(id);
+            ui.close();
+        }
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("Note…"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.open_note(id);
+            ui.close();
+        }
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("Delete node"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.delete(id);
+            ui.close();
+        }
+    });
+    ui.menu_button(tl!("View"), |ui| {
+        if ui.button(tl!("Fit to window")).clicked() {
+            editor.fit();
+            ui.close();
+        }
+        if ui.button(tl!("Zoom in")).clicked() {
+            editor.zoom_step(1.2);
+            ui.close();
+        }
+        if ui.button(tl!("Zoom out")).clicked() {
+            editor.zoom_step(1.0 / 1.2);
+            ui.close();
+        }
+        ui.separator();
+        ui.menu_button(tl!("Theme"), |ui| {
+            for theme in Theme::ALL {
+                if ui.selectable_label(editor.theme == theme, tl!(theme.label())).clicked() {
+                    editor.set_theme(theme);
+                    chosen = Some(theme);
+                    ui.close();
+                }
+            }
+        });
+    });
+    chosen
+}
+
 /// What the card menu shows about its node.
 struct MenuFacts {
     text: String,
@@ -1057,5 +1197,38 @@ mod tests {
         assert!(!editor.can_undo());
         assert!(editor.editing.is_none());
         assert_eq!(editor.selected, editor.doc.root_id());
+    }
+
+    /// Every export format is reachable from the editor, and the PNG one really is a PNG.
+    #[test]
+    fn every_export_format_produces_its_bytes() {
+        let editor = editor();
+
+        let markdown = editor.export(ExportKind::Markdown).expect("markdown");
+        assert!(String::from_utf8_lossy(&markdown).starts_with("# "));
+        assert_eq!(markdown, editor.exported(ExportKind::Markdown).into_bytes());
+
+        let html = editor.export(ExportKind::Html).expect("html");
+        assert!(String::from_utf8_lossy(&html).starts_with("<!doctype html>"));
+
+        let svg = editor.export(ExportKind::Svg).expect("svg");
+        assert!(String::from_utf8_lossy(&svg).starts_with("<?xml"));
+
+        let png = editor.export(ExportKind::Png).expect("png");
+        assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
+        assert!(png.len() > 1_000, "a rendered map is not a stub");
+    }
+
+    /// The theme reaches the exported files: the HTML carries the canvas colour, and switching the
+    /// theme changes it.
+    #[test]
+    fn the_export_follows_the_theme() {
+        let mut editor = editor();
+        editor.set_theme(Theme::Nature);
+        let html = editor.exported(ExportKind::Html);
+        let nature = crate::export::html(&editor.doc.map, &Theme::Nature.colors(), "en");
+        assert_eq!(html, nature);
+        editor.set_theme(Theme::PunkPrincess);
+        assert_ne!(editor.exported(ExportKind::Html), html);
     }
 }

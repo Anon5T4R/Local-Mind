@@ -21,10 +21,12 @@ use crate::tl;
 const MAP_EXTENSIONS: &[&str] = &["tmind", "json"];
 
 /// What a pending file-picker answer is for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Pending {
     Open,
     SaveAs,
+    /// Write the map in this export format to the chosen file.
+    Export(edit::ExportKind),
 }
 
 pub struct LocalApp {
@@ -49,6 +51,8 @@ impl LocalApp {
         crate::fonts::install(&cc.egui_ctx);
         let prefs = Prefs::load();
         i18n::set_language(&prefs.language);
+        let theme = crate::theme::Theme::from_id(&prefs.theme);
+        theme.apply(&cc.egui_ctx);
 
         let mut app = Self {
             updater: Updater::new(&APP, env!("CARGO_PKG_VERSION")),
@@ -61,6 +65,7 @@ impl LocalApp {
             error: None,
             window_title: String::new(),
         };
+        app.editor.set_theme(theme);
         if let Some(path) = initial {
             app.open_path(path);
         }
@@ -89,69 +94,27 @@ impl LocalApp {
                     self.ask_save_as(ui.ctx());
                     ui.close();
                 }
+                ui.menu_button(tl!("Export"), |ui| {
+                    for kind in edit::ExportKind::ALL {
+                        if ui.button(tl!(kind.label())).clicked() {
+                            self.ask_export(ui.ctx(), kind);
+                            ui.close();
+                        }
+                    }
+                });
                 ui.separator();
                 if ui.button(tl!("Quit Local Mind")).clicked() {
                     quit = true;
                     ui.close();
                 }
             });
-            ui.menu_button(tl!("Edit"), |ui| {
-                if ui.add_enabled(self.editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
-                    self.editor.undo();
-                    ui.close();
-                }
-                if ui.add_enabled(self.editor.can_redo(), egui::Button::new(tl!("Redo"))).clicked() {
-                    self.editor.redo();
-                    ui.close();
-                }
-                ui.separator();
-                let selected = self.editor.selected.clone();
-                let has_selection = selected.is_some();
-                if ui.add_enabled(has_selection, egui::Button::new(tl!("Edit text"))).clicked() {
-                    if let Some(id) = &selected {
-                        self.editor.begin_edit(id);
-                    }
-                    ui.close();
-                }
-                if ui.add_enabled(has_selection, egui::Button::new(tl!("New child"))).clicked() {
-                    if let Some(id) = &selected {
-                        self.editor.add_child(id);
-                    }
-                    ui.close();
-                }
-                if ui.add_enabled(has_selection, egui::Button::new(tl!("New sibling"))).clicked() {
-                    if let Some(id) = &selected {
-                        self.editor.add_sibling(id);
-                    }
-                    ui.close();
-                }
-                if ui.add_enabled(has_selection, egui::Button::new(tl!("Note…"))).clicked() {
-                    if let Some(id) = &selected {
-                        self.editor.open_note(id);
-                    }
-                    ui.close();
-                }
-                if ui.add_enabled(has_selection, egui::Button::new(tl!("Delete node"))).clicked() {
-                    if let Some(id) = &selected {
-                        self.editor.delete(id);
-                    }
-                    ui.close();
-                }
-            });
-            ui.menu_button(tl!("View"), |ui| {
-                if ui.button(tl!("Fit to window")).clicked() {
-                    self.editor.fit();
-                    ui.close();
-                }
-                if ui.button(tl!("Zoom in")).clicked() {
-                    self.editor.zoom_step(1.2);
-                    ui.close();
-                }
-                if ui.button(tl!("Zoom out")).clicked() {
-                    self.editor.zoom_step(1.0 / 1.2);
-                    ui.close();
-                }
-            });
+            // Edit and View live in the editor (they only touch it), so the headless tests can use
+            // the same menus the window does.
+            if let Some(theme) = edit::menus(ui, &mut self.editor) {
+                theme.apply(ui.ctx());
+                self.prefs.theme = theme.id().to_string();
+                self.prefs.save();
+            }
             ui.menu_button(tl!("Help"), |ui| {
                 if ui.button(tl!("Check for Updates.")).clicked() {
                     // The outcome shows in the About window, which is where a check belongs.
@@ -272,6 +235,33 @@ impl LocalApp {
         if !self.pickers.ask_save_file(ctx, tl!("Save the mind map"), &name, Some((tl!("Mind map"), MAP_EXTENSIONS))) {
             log::debug!("a file picker is already open");
             self.pending = None;
+        }
+    }
+
+    /// Asks where to write an export, with the map's own name and the format's extension.
+    fn ask_export(&mut self, ctx: &egui::Context, kind: edit::ExportKind) {
+        let stem = localmind_io::suggested_name(&self.editor.doc.map.title);
+        let stem = stem.strip_suffix(".tmind").unwrap_or(&stem).to_string();
+        let name = format!("{stem}.{}", kind.extension());
+        self.pending = Some(Pending::Export(kind));
+        if !self.pickers.ask_save_file(ctx, tl!("Export the map"), &name, Some((tl!(kind.label()), &[kind.extension()]))) {
+            log::debug!("a file picker is already open");
+            self.pending = None;
+        }
+    }
+
+    /// Writes the map in `kind` to `path`. The file is written atomically, like a map.
+    fn export_to(&mut self, path: &Path, kind: edit::ExportKind) {
+        let bytes = match self.editor.export(kind) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                self.error = Some(i18n::tr_fmt("the map could not be exported: {error}", &[("error", &e)]));
+                return;
+            }
+        };
+        match localmind_io::save_bytes(&bytes, path) {
+            Ok(()) => self.error = None,
+            Err(e) => self.error = Some(i18n::tr_fmt("the map could not be exported: {error}", &[("error", &e.to_string())])),
         }
     }
 
@@ -430,8 +420,9 @@ impl eframe::App for LocalApp {
         self.updater.tick(ctx);
         for picked in self.pickers.take() {
             match picked {
-                Picked::File(path) => match self.pending.take() {
+                Picked::File(path) => match self.pending.clone() {
                     Some(Pending::SaveAs) => self.save_to(&path),
+                    Some(Pending::Export(kind)) => self.export_to(&path, kind),
                     _ => self.open_path(path),
                 },
             }

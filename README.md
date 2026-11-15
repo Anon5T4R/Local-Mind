@@ -12,6 +12,12 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
   lado, tamanho do texto, cor, largura, nota e excluir; a alça no canto do cartão selecionado muda a
   largura (um passo de desfazer por arrasto).
 - **Nota do nó editável** (menu → Nota…), o ponto no cartão e a nota nos exports.
+- **Seis temas nomeados** (o escuro padrão, Natureza, Azul escuro, Verde calmo, Rosa pastel e
+  PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o canvas e o minimapa
+  mudam juntos, e a escolha fica salva.
+- **Minimapa** no canto inferior direito, com o viewport marcado e clique/arrasto para navegar.
+- **Export** em Markdown, HTML, SVG e PNG (View/Arquivo → Exportar). O HTML leva as cores do tema;
+  o PNG é o mesmo desenho da tela em 2×.
 - **Layout equilibrado nas quatro direções**: a raiz no centro, os ramos distribuídos à esquerda,
   à direita, para cima e para baixo, com o lado automático escolhido pelo lado mais leve.
 - **Navegação**: arraste para mover o mapa, roda do mouse (ou pinça) para dar zoom no ponto sob o
@@ -29,8 +35,8 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 ## O que ainda vem
 
-As fases seguintes (estilos, export, IA) estão no `UPSTREAM-SYNC.md` com o estado de cada uma. O que
-esta versão **não** faz: exportar e conversar com a IA.
+A fase de IA (remota, por chave própria) está no `UPSTREAM-SYNC.md` com o estado. O que esta versão
+**não** faz: conversar com a IA e a Ajuda da suíte.
 
 ## Formato
 

@@ -22,7 +22,17 @@ fn harness() -> Harness<'static, Editor> {
         // The default step is a quarter of a second, which is longer than egui's double-click
         // window: a realistic frame keeps clicks, drags and double clicks behaving like they do.
         .with_step_dt(1.0 / 60.0)
-        .build_ui_state(|ui, editor: &mut Editor| editor.ui(ui), editor())
+        .build_ui_state(
+            |ui, editor: &mut Editor| {
+                // The same Edit/View menus the window uses (they live in the editor).
+                egui::MenuBar::new().ui(ui, |ui| {
+                    let _ = edit::menus(ui, editor);
+                });
+                editor.theme.apply(ui.ctx());
+                editor.ui(ui);
+            },
+            editor(),
+        )
 }
 
 fn push(harness: &mut Harness<'_, Editor>, event: egui::Event) {
@@ -110,7 +120,7 @@ fn shot(harness: &mut Harness<'_, Editor>, name: &str) {
     if std::env::var_os("LOCALMIND_QA_RENDER").is_none() {
         return;
     }
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-f2");
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-f3");
     if std::fs::create_dir_all(&directory).is_err() {
         return;
     }
@@ -403,4 +413,50 @@ fn the_editor_starts_fitted_on_the_whole_map() {
     assert!(state.rect.width() > 100.0);
     let _: &MindMap = &state.doc.map;
     let _ = edit::COLORS;
+}
+
+/// The View menu changes the theme: a real click on View -> Theme -> Nature.
+#[test]
+fn the_view_menu_changes_the_theme() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    assert_eq!(harness.state().theme, crate::theme::Theme::Default);
+
+    harness.get_by_label("View").click();
+    harness.run_steps(2);
+    harness.get_by_label("Theme").click();
+    harness.run_steps(2);
+    harness.get_by_label("Nature").click();
+    harness.run_steps(3);
+
+    assert_eq!(harness.state().theme, crate::theme::Theme::Nature);
+    // The canvas paints with the theme it now reports.
+    assert_eq!(harness.state().colors().canvas, crate::theme::Theme::Nature.colors().canvas);
+    shot(&mut harness, "theme-nature");
+
+    // And a dark theme after it, so the renders show both ends of the range.
+    harness.get_by_label("View").click();
+    harness.run_steps(2);
+    harness.get_by_label("Theme").click();
+    harness.run_steps(2);
+    harness.get_by_label("PunkPrincess").click();
+    harness.run_steps(3);
+    assert_eq!(harness.state().theme, crate::theme::Theme::PunkPrincess);
+    shot(&mut harness, "theme-punkprincess");
+}
+
+/// A click on the minimap moves the view.
+#[test]
+fn clicking_the_minimap_moves_the_view() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    let before = harness.state().view.pan;
+    let minimap = canvas::minimap_rect(harness.state().rect).expect("the canvas is big enough for a minimap");
+    // Right of the centre: the view has to pan left.
+    let target = minimap.center() + egui::vec2(minimap.width() * 0.3, 0.0);
+    click(&mut harness, target);
+    let after = harness.state().view.pan;
+    assert_ne!(before, after, "the click moves the canvas");
+    assert!(after.x < before.x, "clicking right of the minimap centre pans the map left: {before:?} -> {after:?}");
+    shot(&mut harness, "minimap");
 }

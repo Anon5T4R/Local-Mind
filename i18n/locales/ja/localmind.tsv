@@ -67,3 +67,16 @@
 	Close	閉じる
 	the map could not be opened: {error}	マップを開けませんでした: {error}
 	the map could not be saved: {error}	マップを保存できませんでした: {error}
+	the map could not be exported: {error}	マップを書き出せませんでした: {error}
+	Theme	テーマ
+	Dark (default)	ダーク (既定)
+	Nature	ネイチャー
+	Dark blue	ダークブルー
+	Calm green	カームグリーン
+	Pastel pink	パステルピンク
+	Export	書き出し
+	Markdown	Markdown
+	HTML	HTML
+	SVG	SVG
+	PNG	PNG
+	Export the map	マップを書き出す

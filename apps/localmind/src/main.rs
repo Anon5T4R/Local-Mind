@@ -14,11 +14,14 @@ mod app;
 mod canvas;
 mod doc;
 mod edit;
+mod export;
 mod fonts;
 mod i18n;
 mod pickers;
+mod png;
 mod prefs;
 mod suite_entry;
+mod theme;
 
 #[cfg(test)]
 mod ui_tests;

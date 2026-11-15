@@ -1,6 +1,6 @@
 //! The app's own settings, kept in a small JSON file next to the rest of the user's data.
 //!
-//! Only what the app itself needs: right now the interface language. The maps live in the files
+//! Only what the app itself needs: the interface language and the theme. The maps live in the files
 //! the user opens, never here, and nothing about them is cached in this file.
 
 use std::path::PathBuf;
@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n;
 use crate::suite_entry::APP;
+use crate::theme::Theme;
 
 /// The file name inside the app's folder.
 const FILE: &str = "prefs.json";
@@ -19,15 +20,22 @@ pub struct Prefs {
     /// The `language` setting: `auto` or a code from `i18n::LANGUAGES`.
     #[serde(default = "auto_language")]
     pub language: String,
+    /// The `theme` setting: one of the ids in [`Theme::ALL`].
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn auto_language() -> String {
     i18n::AUTO.to_string()
 }
 
+fn default_theme() -> String {
+    Theme::default().id().to_string()
+}
+
 impl Default for Prefs {
     fn default() -> Self {
-        Self { language: auto_language() }
+        Self { language: auto_language(), theme: default_theme() }
     }
 }
 
@@ -99,14 +107,16 @@ mod tests {
     fn a_missing_language_reads_as_auto() {
         let prefs: Prefs = serde_json::from_str("{}").expect("defaults");
         assert_eq!(prefs.language, i18n::AUTO);
+        assert_eq!(prefs.theme, Theme::default().id());
     }
 
     #[test]
-    fn the_language_survives_a_round_trip() {
-        let prefs = Prefs { language: "pt-br".into() };
+    fn the_language_and_the_theme_survive_a_round_trip() {
+        let prefs = Prefs { language: "pt-br".into(), theme: "punkprincess".into() };
         let text = serde_json::to_string(&prefs).expect("serialize");
         let back: Prefs = serde_json::from_str(&text).expect("parse");
         assert_eq!(back.language, "pt-br");
+        assert_eq!(Theme::from_id(&back.theme), Theme::PunkPrincess);
     }
 
     #[test]

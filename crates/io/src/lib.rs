@@ -73,8 +73,14 @@ pub fn save(map: &MindMap, path: &Path) -> Result<(), Error> {
 
 /// Writes `text` to `path` through a sibling file and a rename.
 pub fn save_text(text: &str, path: &Path) -> Result<(), Error> {
+    save_bytes(text.as_bytes(), path)
+}
+
+/// Writes `bytes` to `path` through a sibling file and a rename. Both a map and an export go through
+/// here, so an interrupted write never leaves half a file.
+pub fn save_bytes(bytes: &[u8], path: &Path) -> Result<(), Error> {
     let temp = temp_sibling(path);
-    std::fs::write(&temp, text).map_err(|e| Error::Io(e.to_string()))?;
+    std::fs::write(&temp, bytes).map_err(|e| Error::Io(e.to_string()))?;
     // `rename` replaces an existing file on both Windows (MoveFileEx with MOVEFILE_REPLACE_EXISTING)
     // and Unix, and it is the only step the user can perceive either way.
     match std::fs::rename(&temp, path) {

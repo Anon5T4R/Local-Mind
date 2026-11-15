@@ -32,6 +32,9 @@ log = "0.4"
 # format is parsed into `serde` types with a flattened map for whatever a newer build wrote.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+# The PNG export squeezes its IDAT with deflate. Pure Rust, and already in the graph through
+# craft-update (zip/flate2); this is only the direct edge.
+miniz_oxide = "0.8"
 
 # ui
 # 0.37: `default_fonts` is no longer an egui default and the monochrome emoji faces moved behind

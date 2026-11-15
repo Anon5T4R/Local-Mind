@@ -67,3 +67,16 @@
 	Close	Cerrar
 	the map could not be opened: {error}	no se pudo abrir el mapa: {error}
 	the map could not be saved: {error}	no se pudo guardar el mapa: {error}
+	the map could not be exported: {error}	no se pudo exportar el mapa: {error}
+	Theme	Tema
+	Dark (default)	Oscuro (predeterminado)
+	Nature	Naturaleza
+	Dark blue	Azul oscuro
+	Calm green	Verde tranquilo
+	Pastel pink	Rosa pastel
+	Export	Exportar
+	Markdown	Markdown
+	HTML	HTML
+	SVG	SVG
+	PNG	PNG
+	Export the map	Exportar el mapa
