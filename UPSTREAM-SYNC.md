@@ -18,8 +18,8 @@ virou a suíte deste app em `crates/localmind-*`.
 
 | Fase | Escopo | Estado |
 |---|---|---|
-| F1 (v0.1.0) | nascimento, modelo, layout, `.tmind` (abrir/salvar/salvar como), canvas com pan/zoom/fit/seleção, associação de arquivo, i18n, ícone | **concluída** |
-| F2 | edição: texto inline, filho/irmão, excluir, colapsar, desfazer/refazer, indentar/desindentar/mover, menu de contexto, largura por arrasto, nota editável | pendente |
+| F1 (v0.1.0) | nascimento, modelo, layout, `.tmind` (abrir/salvar/salvar como), canvas com pan/zoom/fit/seleção, associação de arquivo, i18n, ícone | **concluída e publicada** (8 assets assinados) |
+| F2 (v0.2.0) | edição: texto inline (guarda de IME), filho/irmão, excluir, colapsar, desfazer/refazer, indentar/desindentar/mover, menu de contexto, largura por arrasto, nota editável | **concluída e publicada** (16 testes de UI no kittest) |
 | F3 | estilos (cor, fonte, lado), temas nomeados, minimapa, export Markdown/HTML/PNG | pendente |
 | F4 | IA remota (BYOK via `local-ai`): gerar mapa, expandir, expandir fundo, explicar, reescrever, chat | pendente |
 | F5 (v1.0.0) | paridade e polimento: tabela final, fixture de `.tmind` real, Ajuda, docs | pendente |

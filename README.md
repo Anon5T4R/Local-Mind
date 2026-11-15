@@ -6,6 +6,12 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 ## O que funciona
 
+- **Edição completa do mapa**: duplo clique (ou F2) escreve no cartão; Tab cria um filho, Enter um
+  irmão, Delete exclui a subárvore (selecionando o pai), Espaço colapsa, as setas navegam, Alt+setas
+  movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem. O menu do cartão (clique direito) tem estrutura,
+  lado, tamanho do texto, cor, largura, nota e excluir; a alça no canto do cartão selecionado muda a
+  largura (um passo de desfazer por arrasto).
+- **Nota do nó editável** (menu → Nota…), o ponto no cartão e a nota nos exports.
 - **Layout equilibrado nas quatro direções**: a raiz no centro, os ramos distribuídos à esquerda,
   à direita, para cima e para baixo, com o lado automático escolhido pelo lado mais leve.
 - **Navegação**: arraste para mover o mapa, roda do mouse (ou pinça) para dar zoom no ponto sob o
@@ -23,9 +29,8 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 ## O que ainda vem
 
-As fases seguintes (edição, estilos, export, IA) estão no `UPSTREAM-SYNC.md` com o estado de cada
-uma. O que esta versão **não** faz: editar (o mapa abre só para leitura), exportar e conversar com
-a IA.
+As fases seguintes (estilos, export, IA) estão no `UPSTREAM-SYNC.md` com o estado de cada uma. O que
+esta versão **não** faz: exportar e conversar com a IA.
 
 ## Formato
 
