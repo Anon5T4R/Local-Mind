@@ -37,6 +37,11 @@ pub struct CanvasView {
     pub needs_fit: bool,
     /// The width drag happening right now, if any.
     pub resizing: Option<Resize>,
+    /// The card being dragged with Ctrl held (a re-parent in progress).
+    pub reparenting: Option<String>,
+    /// Where a Ctrl+press landed: the drag that may follow is a re-parent. The modifier is read on
+    /// the press, because by the time egui calls it a drag the events carrying it are gone.
+    pub arm_reparent: Option<Pos2>,
 }
 
 /// A width drag on the selected card: where it started and from which width.
@@ -49,7 +54,7 @@ pub struct Resize {
 
 impl Default for CanvasView {
     fn default() -> Self {
-        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true, resizing: None }
+        Self { pan: Vec2::ZERO, zoom: 1.0, needs_fit: true, resizing: None, reparenting: None, arm_reparent: None }
     }
 }
 
@@ -165,6 +170,8 @@ pub struct CanvasOutput {
     pub width: Option<(String, f32)>,
     /// The width drag ended this frame.
     pub width_finished: bool,
+    /// A Ctrl+drag dropped `node` on `target`: re-parent it. Only emitted for a valid target.
+    pub reparent: Option<(String, String)>,
 }
 
 impl Default for CanvasOutput {
@@ -178,6 +185,7 @@ impl Default for CanvasOutput {
             context_menu: None,
             width: None,
             width_finished: false,
+            reparent: None,
         }
     }
 }
@@ -198,6 +206,7 @@ pub fn show(
     interact(ui, &response, rect, map, view, &layout, selected, pointer_over_minimap(rect, ui.input(|i| i.pointer.interact_pos())), &mut out);
 
     paint(&ui.painter_at(rect), map, &layout, view, rect, selected, editing, colors);
+    reparent_overlay(&ui.painter_at(rect), map, &layout, view, rect, ui.input(|i| i.pointer.hover_pos()), colors);
     minimap(ui, rect, map, &layout, view, colors);
     hover_cursor(ui, &response, map, &layout, view, rect, selected);
     out
@@ -279,6 +288,41 @@ fn interact(
         if handle_rect(view, card).contains(pressed_at) {
             view.resizing = Some(Resize { node: id.to_string(), start_pointer_x: pressed_at.x, start_width: width_of(node) });
         }
+    }
+
+    // Ctrl+drag moves a card under another one (a re-parent). It is checked before the pan so the
+    // two never fight over the same gesture. The Ctrl is read on the press: when egui reports the
+    // drag, the events that carried the modifier are already gone.
+    let press_with_command = ui.input(|i| {
+        i.events
+            .iter()
+            .any(|event| matches!(event, egui::Event::PointerButton { pressed: true, modifiers, .. } if modifiers.command || modifiers.ctrl))
+    });
+    if press_with_command && let Some(pressed_at) = ui.input(|i| i.pointer.press_origin()) {
+        view.arm_reparent = Some(pressed_at);
+    }
+    if response.drag_started()
+        && let Some(pressed_at) = view.arm_reparent.take()
+        && let Some(node) = hit_test(map, layout, view, rect, pressed_at)
+        && map.node(&node).is_some_and(|node| node.parent_id.is_some())
+    {
+        view.reparenting = Some(node);
+    }
+    if !response.is_pointer_button_down_on() {
+        view.arm_reparent = None;
+    }
+    if let Some(node) = view.reparenting.clone() {
+        if response.drag_stopped() {
+            if let Some(pointer) = pointer
+                && let Some(target) = hit_test(map, layout, view, rect, pointer)
+                && map.reparent_targets(&node).contains(&target)
+            {
+                out.reparent = Some((node, target));
+            }
+            view.reparenting = None;
+        }
+        // The drag belongs to the re-parent: the canvas does not pan under it.
+        return;
     }
 
     if let Some(resize) = view.resizing.clone() {
@@ -504,6 +548,37 @@ fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut Can
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
+}
+
+/// While Ctrl+dragging a card: the card being moved, the target under the pointer and the link
+/// between them, so the drop is visible before it happens.
+fn reparent_overlay(
+    painter: &egui::Painter,
+    map: &MindMap,
+    layout: &Layout,
+    view: &CanvasView,
+    rect: Rect,
+    pointer: Option<Pos2>,
+    colors: &crate::theme::Colors,
+) {
+    let Some(node_id) = view.reparenting.as_deref() else { return };
+    let Some(node) = map.node(node_id) else { return };
+    let Some(pos) = layout.positions.get(node_id) else { return };
+    let size = node_size(node);
+    let card = card_rect(view, rect, *pos, (size.w, size.h));
+    painter.rect_stroke(card, CornerRadius::same(8), Stroke::new(2.0, colors.accent), StrokeKind::Inside);
+
+    let Some(pointer) = pointer else { return };
+    let Some(target) = hit_test(map, layout, view, rect, pointer) else { return };
+    if !map.reparent_targets(node_id).contains(&target) {
+        return;
+    }
+    let Some(target_node) = map.node(&target) else { return };
+    let Some(target_pos) = layout.positions.get(&target) else { return };
+    let target_size = node_size(target_node);
+    let target_card = card_rect(view, rect, *target_pos, (target_size.w, target_size.h));
+    painter.rect_stroke(target_card, CornerRadius::same(8), Stroke::new(2.5, colors.accent), StrokeKind::Inside);
+    painter.line_segment([card.center(), target_card.center()], Stroke::new(1.5, colors.accent));
 }
 
 /// The links, drawn under the cards: a cubic curve from the parent's centre to the child's, with
@@ -741,7 +816,7 @@ mod tests {
     fn the_hit_test_follows_pan_and_zoom() {
         let map = MindMap::new("t", "central");
         let root = map.root_id().map(str::to_string).unwrap_or_default();
-        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false, resizing: None };
+        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false, resizing: None, reparenting: None, arm_reparent: None };
         let layout = layout_tree(&map.nodes);
         let canvas = rect();
         let node = map.node(&root).expect("root");
@@ -810,7 +885,7 @@ mod tests {
     #[test]
     fn the_world_view_matches_the_mapping() {
         let canvas = rect();
-        let view = CanvasView { zoom: 1.5, pan: vec2(30.0, -20.0), needs_fit: false, resizing: None };
+        let view = CanvasView { zoom: 1.5, pan: vec2(30.0, -20.0), needs_fit: false, resizing: None, reparenting: None, arm_reparent: None };
         let world = world_view(&view, canvas);
         let screen = card_rect(&view, canvas, localmind_layout::Pos { x: world.center().x, y: world.center().y }, (0.0, 0.0)).min;
         assert!((screen.x - canvas.center().x).abs() < 0.01);

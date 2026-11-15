@@ -9,12 +9,15 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 - **Edição completa do mapa**: duplo clique (ou F2) escreve no cartão; Tab cria um filho, Enter um
   irmão, Delete exclui a subárvore (selecionando o pai), Espaço colapsa, as setas navegam, Alt+setas
   movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem. O menu do cartão (clique direito) tem estrutura,
-  lado, tamanho do texto, cor, largura, nota e excluir; a alça no canto do cartão selecionado muda a
-  largura (um passo de desfazer por arrasto).
+  lado, tamanho do texto, cor, largura, nota, "Mover para…" e excluir; a alça no canto do cartão
+  selecionado muda a largura (um passo de desfazer por arrasto).
+- **Mover um cartão para outro pai**: **Ctrl+arrasto** leva o cartão (com a subárvore) para baixo de
+  outro, destacando o alvo antes de soltar e recusando os ciclos; o menu do cartão e o menu **Edit**
+  abrem "Mover para…" para escolher o pai numa lista.
 - **Nota do nó editável** (menu → Nota…), o ponto no cartão e a nota nos exports.
-- **Seis temas nomeados** (o escuro padrão, Natureza, Azul escuro, Verde calmo, Rosa pastel e
-  PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o canvas e o minimapa
-  mudam juntos, e a escolha fica salva.
+- **Sete temas nomeados** (o escuro padrão, **Claro** no padrão craft, Natureza, Azul escuro, Verde
+  calmo, Rosa pastel e PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o
+  canvas e o minimapa mudam juntos, e a escolha fica salva.
 - **IA com a sua chave** (menu **AI**): conexões com preset de provedor e chave no keychain do
   sistema; gerar mapa de um tema ou de um texto, expandir, expandir fundo, explicar, reescrever com
   instrução, e um chat com streaming que insere a resposta como nó ou ramo. Sem motor local: os
@@ -34,14 +37,16 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
   arquivo para a janela.
 - **Interface em português, espanhol, japonês e inglês** (o inglês é a fonte; o idioma segue o
   sistema e a escolha fica salva).
-- **Janela About com verificação de atualizações** (`craft-update`), MSI no Windows, AppImage/deb/
-  rpm/tar e pacote Arch no Linux.
+- **Janela About com verificação de atualizações** (`craft-update`), **Ajuda** com o teclado e o
+  mouse (menu **Help → Teclado e mouse**), MSI no Windows, AppImage/deb/rpm/tar e pacote Arch no
+  Linux.
 
 ## O que ainda vem
 
-A paridade final (tabela, Ajuda, docs) fecha na v1.0.0 — ver `UPSTREAM-SYNC.md`. No backlog do app:
-mover/realocar filhos por arrasto (Ctrl+arrasto, com diálogo de "novo pai" como plano B) e um tema
-claro no padrão craft, além dos seis herdados.
+A porta do LocalMind Electron está fechada na **v1.0.0**: a paridade item a item está na tabela do
+`UPSTREAM-SYNC.md`, e as diferenças conscientes (IA só remota, nota editável, re-parent por arrasto,
+tema claro, SVG/PNG próprios, janela por arquivo) estão lá declaradas. Daqui em diante são
+correções de campo e ideias novas, não paridade.
 
 ## Formato
 

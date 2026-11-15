@@ -14,6 +14,8 @@ pub enum Theme {
     /// The dark theme the app ships with.
     #[default]
     Default,
+    /// The suite's neutral light theme (craft's greys and blue): the counterpart of `Default`.
+    Light,
     Nature,
     DarkBlue,
     CalmGreen,
@@ -48,12 +50,14 @@ pub struct Colors {
 
 impl Theme {
     /// The six themes, in the order the original app listed them.
-    pub const ALL: [Theme; 6] = [Theme::Default, Theme::Nature, Theme::DarkBlue, Theme::CalmGreen, Theme::PastelPink, Theme::PunkPrincess];
+    pub const ALL: [Theme; 7] =
+        [Theme::Default, Theme::Light, Theme::Nature, Theme::DarkBlue, Theme::CalmGreen, Theme::PastelPink, Theme::PunkPrincess];
 
     /// The stable id used in the preferences file and in the menu.
     pub fn id(self) -> &'static str {
         match self {
             Theme::Default => "default",
+            Theme::Light => "light",
             Theme::Nature => "nature",
             Theme::DarkBlue => "darkblue",
             Theme::CalmGreen => "calmgreen",
@@ -72,6 +76,7 @@ impl Theme {
     pub fn label(self) -> &'static str {
         match self {
             Theme::Default => "Dark (default)",
+            Theme::Light => "Light",
             Theme::Nature => "Nature",
             Theme::DarkBlue => "Dark blue",
             Theme::CalmGreen => "Calm green",
@@ -97,6 +102,23 @@ impl Theme {
                 minimap_stroke: rgb(0x46, 0x50, 0x62),
                 minimap_mask: rgba(0x1a, 0x1c, 0x1f, 0.6),
                 dark: true,
+            },
+            Theme::Light => Colors {
+                // The suite's neutral light: the same grey ramp and blue accent the craft apps use.
+                canvas: rgb(0xf2, 0xf4, 0xf7),
+                surface: rgb(0xf7, 0xf9, 0xfb),
+                panel: rgb(0xff, 0xff, 0xff),
+                border: rgb(0xd5, 0xdb, 0xe3),
+                text: rgb(0x1f, 0x29, 0x33),
+                muted: rgb(0x5c, 0x6b, 0x7a),
+                accent: rgb(0x25, 0x63, 0xeb),
+                accent_second: rgb(0x0e, 0xa5, 0xe9),
+                selection_bg: rgb(0xe3, 0xec, 0xfb),
+                dots: rgb(0xd9, 0xde, 0xe6),
+                minimap_node: rgb(0xdb, 0xe2, 0xea),
+                minimap_stroke: rgb(0xb8, 0xc2, 0xcf),
+                minimap_mask: rgba(0xf2, 0xf4, 0xf7, 0.6),
+                dark: false,
             },
             Theme::Nature => Colors {
                 canvas: rgb(0xee, 0xf1, 0xe9),

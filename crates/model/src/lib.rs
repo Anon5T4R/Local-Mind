@@ -330,6 +330,40 @@ impl MindMap {
         true
     }
 
+    /// Moves `id` (with its subtree) under `new_parent`. Refused when it would not change anything,
+    /// when the node is the root, or when `new_parent` is the node itself or inside its subtree -
+    /// that last one would cut the map in two, a cycle nobody can repair from the canvas.
+    pub fn reparent(&mut self, id: &str, new_parent: &str) -> bool {
+        if id == new_parent {
+            return false;
+        }
+        let Some(node) = self.node(id) else { return false };
+        if node.parent_id.is_none() {
+            return false;
+        }
+        let current = node.parent_id.clone();
+        if current.as_deref() == Some(new_parent) {
+            return false;
+        }
+        if self.node(new_parent).is_none() {
+            return false;
+        }
+        if self.descendant_ids(id).contains(new_parent) {
+            return false;
+        }
+        if let Some(node) = self.node_mut(id) {
+            node.parent_id = Some(new_parent.to_string());
+        }
+        self.touch();
+        true
+    }
+
+    /// The nodes `id` could be moved under: everyone except itself and its own subtree.
+    pub fn reparent_targets(&self, id: &str) -> Vec<String> {
+        let blocked = self.descendant_ids(id);
+        self.nodes.iter().filter(|candidate| candidate.id != id && !blocked.contains(&candidate.id)).map(|candidate| candidate.id.clone()).collect()
+    }
+
     pub fn toggle_collapse(&mut self, id: &str) -> bool {
         self.edit_node(id, |node| {
             node.collapsed = if node.collapsed == Some(true) { None } else { Some(true) };
@@ -616,6 +650,40 @@ mod tests {
         // A child of the root cannot go further up, and the root cannot move at all.
         assert!(!map.outdent("a"));
         assert!(!map.outdent("r"));
+    }
+
+    /// Re-parenting takes the subtree along and refuses the moves that would break the tree: making
+    /// a node its own parent, or moving it under its own descendant (a cycle nobody can repair).
+    #[test]
+    fn reparenting_moves_the_subtree_and_refuses_cycles() {
+        let mut map = map(vec![node("r", None), node("a", Some("r")), node("a1", Some("a")), node("b", Some("r"))]);
+        assert!(map.reparent("a1", "b"));
+        assert_eq!(map.node("a1").and_then(|n| n.parent_id.as_deref()), Some("b"));
+
+        // Under its own descendant: refused, and nothing moved.
+        assert!(!map.reparent("b", "a1"));
+        assert_eq!(map.node("b").and_then(|n| n.parent_id.as_deref()), Some("r"));
+        // Itself, a missing target, the root as the moved node, and the same parent: all no-ops.
+        assert!(!map.reparent("b", "b"));
+        assert!(!map.reparent("b", "fantasma"));
+        assert!(!map.reparent("r", "a"));
+        assert!(!map.reparent("a", "r"));
+        // And the subtree follows its node.
+        assert!(map.reparent("a", "b"));
+        let descendants = map.descendant_ids("a");
+        assert!(!descendants.contains("a1"), "a1 moved away earlier");
+        assert_eq!(map.node("a").and_then(|n| n.parent_id.as_deref()), Some("b"));
+    }
+
+    /// The targets a card can be dropped on: everyone but itself and its own subtree.
+    #[test]
+    fn the_reparent_targets_exclude_the_node_and_its_subtree() {
+        let map = map(vec![node("r", None), node("a", Some("r")), node("a1", Some("a")), node("b", Some("r")), node("orfao", Some("sumiu"))]);
+        let targets = map.reparent_targets("a");
+        assert!(!targets.contains(&"a".to_string()));
+        assert!(!targets.contains(&"a1".to_string()));
+        assert!(targets.contains(&"r".to_string()));
+        assert!(targets.contains(&"b".to_string()));
     }
 
     #[test]

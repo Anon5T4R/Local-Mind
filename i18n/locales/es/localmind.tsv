@@ -118,3 +118,20 @@
 	As a node	Como nodo
 	As a branch	Como rama
 	No AI connection yet. Open AI > Connections… and add one.	Aún no hay conexión de IA. Abre IA > Conexiones… y añade una.
+	Move to…	Mover a…
+	Move	Mover
+	Choose a new parent	Elige un nuevo padre
+	Keyboard and mouse	Teclado y ratón
+	New child of the selected card	Nuevo hijo de la tarjeta seleccionada
+	Edit the card's text	Editar el texto de la tarjeta
+	Delete the card and its branch	Eliminar la tarjeta y su rama
+	Collapse or expand the branch	Contraer o expandir la rama
+	Move the selection through the map	Mover la selección por el mapa
+	Move the card: reorder, indent, outdent	Mover la tarjeta: reordenar, indentar, desindentar
+	Move a card under another one	Mover una tarjeta debajo de otra
+	Undo and redo	Deshacer y rehacer
+	The card menu: style, note, move, delete	El menú de la tarjeta: estilo, nota, mover, eliminar
+	Pan and zoom the canvas	Mover y ampliar el lienzo
+	Save and open a map	Guardar y abrir un mapa
+	The maps are .tmind files, the same format the original LocalMind wrote.	Los mapas son archivos .tmind, el mismo formato que escribía el LocalMind original.
+	Light	Claro

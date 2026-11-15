@@ -118,3 +118,20 @@
 	As a node	ノードとして
 	As a branch	ブランチとして
 	No AI connection yet. Open AI > Connections… and add one.	AI 接続がまだありません。AI > 接続… を開いて追加してください。
+	Move to…	移動先…
+	Move	移動
+	Choose a new parent	新しい親を選択
+	Keyboard and mouse	キーボードとマウス
+	New child of the selected card	選択中のカードに子を追加
+	Edit the card's text	カードのテキストを編集
+	Delete the card and its branch	カードとそのブランチを削除
+	Collapse or expand the branch	ブランチを折りたたむ／展開
+	Move the selection through the map	選択をマップ内で移動
+	Move the card: reorder, indent, outdent	カードを移動: 並べ替え・インデント・解除
+	Move a card under another one	カードを別のカードの下へ移動
+	Undo and redo	元に戻す・やり直す
+	The card menu: style, note, move, delete	カードメニュー: スタイル・ノート・移動・削除
+	Pan and zoom the canvas	キャンバスの移動とズーム
+	Save and open a map	マップの保存と読み込み
+	The maps are .tmind files, the same format the original LocalMind wrote.	マップは .tmind ファイルです。元の LocalMind と同じ形式です。
+	Light	ライト

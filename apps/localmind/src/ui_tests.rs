@@ -474,6 +474,17 @@ fn the_view_menu_changes_the_theme() {
     assert_eq!(harness.state().colors().canvas, crate::theme::Theme::Nature.colors().canvas);
     shot(&mut harness, "theme-nature");
 
+    // The craft light theme: the neutral counterpart of the default.
+    harness.get_by_label("View").click();
+    harness.run_steps(2);
+    harness.get_by_label("Theme").click();
+    harness.run_steps(2);
+    harness.get_by_label("Light").click();
+    harness.run_steps(3);
+    assert_eq!(harness.state().theme, crate::theme::Theme::Light);
+    assert!(!harness.state().colors().dark);
+    shot(&mut harness, "theme-light");
+
     // And a dark theme after it, so the renders show both ends of the range.
     harness.get_by_label("View").click();
     harness.run_steps(2);
@@ -483,6 +494,69 @@ fn the_view_menu_changes_the_theme() {
     harness.run_steps(3);
     assert_eq!(harness.state().theme, crate::theme::Theme::PunkPrincess);
     shot(&mut harness, "theme-punkprincess");
+}
+
+#[test]
+fn ctrl_drag_moves_a_card_under_another() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    drag_with_command(&mut harness, "c0ltur4s", "d3b1t0s3");
+
+    assert_eq!(
+        harness.state().doc.map.node("c0ltur4s").and_then(|n| n.parent_id.as_deref()),
+        Some("d3b1t0s3"),
+        "the card dropped on another becomes its child"
+    );
+    assert!(harness.state().can_undo(), "the move is an undo step");
+    shot(&mut harness, "reparented");
+
+    // Dropping a card on its own descendant is refused: the tree is not cut in two.
+    drag_with_command(&mut harness, "d3b1t0s3", "c0ltur4s");
+    assert_eq!(
+        harness.state().doc.map.node("d3b1t0s3").and_then(|n| n.parent_id.as_deref()),
+        Some("m0n1t0r4"),
+        "a refused drop leaves the node where it was"
+    );
+}
+
+/// A Ctrl+drag from one card to another: press on `from`, move to `to`, release there.
+fn drag_with_command(harness: &mut Harness<'_, Editor>, from: &str, to: &str) {
+    let from = card_center(harness, from);
+    let to = card_center(harness, to);
+    push(harness, egui::Event::PointerMoved(from));
+    harness.run_steps(1);
+    push(harness, egui::Event::PointerButton { pos: from, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::COMMAND });
+    harness.run_steps(1);
+    push(harness, egui::Event::PointerMoved(to));
+    harness.run_steps(2);
+    push(harness, egui::Event::PointerButton { pos: to, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::COMMAND });
+    harness.run_steps(3);
+}
+
+/// The "move to…" dialog (the keyboard-free re-parent): it opens from the card menu and lists the
+/// parents a node may be moved under.
+#[test]
+fn the_move_to_dialog_offers_the_valid_parents() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    right_click_card(&mut harness, "c0ltur4s");
+    harness.run_steps(2);
+    harness.get_by_label("Move to…").click();
+    harness.run_steps(3);
+    let state = harness.state();
+    let dialog = state.move_to.as_ref().expect("the dialog is open");
+    assert_eq!(dialog.node, "c0ltur4s");
+    let targets = state.doc.map.reparent_targets("c0ltur4s");
+    assert!(targets.contains(&"d3b1t0s3".to_string()));
+    assert!(!targets.contains(&"c0ltur4s".to_string()), "a card is not a parent of itself");
+    shot(&mut harness, "move-to-dialog");
+
+    // The move itself is the same model operation the drop uses (and the dialog's button is a
+    // Window row, which the synthetic click cannot reach - see the lesson in licoes-de-porta).
+    let mut harness2 = harness_with(editor());
+    harness2.run_steps(2);
+    harness2.state_mut().reparent("c0ltur4s", "d3b1t0s3");
+    assert_eq!(harness2.state().doc.map.node("c0ltur4s").and_then(|n| n.parent_id.as_deref()), Some("d3b1t0s3"));
 }
 
 /// A click on the minimap moves the view.
@@ -608,9 +682,9 @@ fn no_connection_says_how_to_add_one() {
 /// The connections panel: "Add connection" opens a draft with a provider preset, its base URL, and
 /// the key field. Nothing is written to the keychain here (the test never presses "Save key").
 ///
-/// The draft's Cancel/Save buttons are not clicked: kittest's synthetic click does not reach the
-/// window's lower rows after the window grows (egui resolves the pointer against the area rect it
-/// knew at the start of the frame), so their behaviour is covered by hand QA of the render.
+/// The draft's Cancel/Save buttons are not clicked: kittest's synthetic click does not reach a
+/// `Window`'s lower rows after it grows in the same frame (the suite lesson in
+/// `docs/planos/licoes-de-porta.md`), so their behaviour is covered by hand QA of the render.
 #[test]
 fn the_connections_panel_opens_a_draft_from_a_preset() {
     let mut harness = harness();

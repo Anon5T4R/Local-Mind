@@ -37,6 +37,10 @@ pub struct Editor {
     pub editing: Option<Editing>,
     pub menu: Option<MenuState>,
     pub note: Option<NoteState>,
+    /// The "move to…" dialog (the keyboard-free way to re-parent a card).
+    pub move_to: Option<MoveTo>,
+    /// The help window.
+    pub help_open: bool,
     /// The canvas rect of the last frame (the zoom commands need it).
     pub rect: Rect,
     history: History,
@@ -67,6 +71,12 @@ pub struct NoteState {
     pub draft: String,
 }
 
+/// The "move to…" dialog: which node, and the parent picked so far.
+pub struct MoveTo {
+    pub node: String,
+    pub choice: Option<String>,
+}
+
 impl Editor {
     pub fn new(doc: Document) -> Self {
         let selected = doc.root_id();
@@ -79,6 +89,8 @@ impl Editor {
             editing: None,
             menu: None,
             note: None,
+            move_to: None,
+            help_open: false,
             rect: Rect::NOTHING,
             history: History::default(),
             resizing: false,
@@ -414,6 +426,8 @@ impl Editor {
         }
         self.card_menu(ui.ctx());
         self.note_window(ui.ctx());
+        self.move_to_window(ui.ctx());
+        self.help_window(ui.ctx());
         // The AI polls its worker, then draws its strip and dialogs over the map.
         self.ai_tick();
         self.ai_tick_models();
@@ -435,6 +449,9 @@ impl Editor {
         }
         if let Some(id) = out.badge_clicked {
             self.toggle_collapse(&id);
+        }
+        if let Some((node, target)) = out.reparent {
+            self.reparent(&node, &target);
         }
         if let Some((id, at)) = out.context_menu {
             self.selected = Some(id.clone());
@@ -647,6 +664,9 @@ impl Editor {
                 if ui.button(tl!("Note…")).on_hover_text(truncate(&facts.note, 60)).clicked() {
                     action = Some(MenuAction::Note);
                 }
+                if !facts.is_root && ui.button(tl!("Move to…")).clicked() {
+                    action = Some(MenuAction::MoveTo);
+                }
                 if facts.is_root_child && !facts.is_root {
                     ui.menu_button(tl!("Side"), |ui| {
                         for (label, side) in [
@@ -714,11 +734,32 @@ impl Editor {
             MenuAction::Sibling => self.add_sibling(&node),
             MenuAction::Toggle => self.toggle_collapse(&node),
             MenuAction::Note => self.open_note(&node),
+            MenuAction::MoveTo => self.open_move_to(&node),
             MenuAction::Side(side) => self.set_side(&node, side),
             MenuAction::Font(delta) => self.bump_font(&node, delta),
             MenuAction::ResetWidth => self.reset_width(&node),
             MenuAction::Colour(colour) => self.set_color(&node, colour),
             MenuAction::Delete => self.delete(&node),
+        }
+    }
+
+    /// Moves a node (with its subtree) under another card: the Ctrl+drag drop, and the dialog.
+    pub fn reparent(&mut self, node: &str, target: &str) {
+        let node_owned = node.to_string();
+        let target_owned = target.to_string();
+        if self.edit(|map| map.reparent(&node_owned, &target_owned)) {
+            self.selected = Some(node_owned);
+            // The map changed shape: frame it again so the moved branch is in sight.
+            self.view.needs_fit = true;
+            self.move_to = None;
+        }
+    }
+
+    /// Opens the "move to…" dialog for a node (the keyboard-free re-parent).
+    pub fn open_move_to(&mut self, node: &str) {
+        if self.doc.map.node(node).is_some_and(|n| n.parent_id.is_some()) {
+            self.move_to = Some(MoveTo { node: node.to_string(), choice: None });
+            self.menu = None;
         }
     }
 
@@ -773,6 +814,97 @@ impl Editor {
             return;
         }
         self.note = Some(note);
+    }
+
+    /// The "move to…" dialog: pick the new parent from a list (no drag involved).
+    fn move_to_window(&mut self, ctx: &Context) {
+        let Some(mut state) = self.move_to.take() else { return };
+        let subject = self.doc.map.node(&state.node).map(|n| n.text.clone()).unwrap_or_default();
+        let targets = self.doc.map.reparent_targets(&state.node);
+        let mut open = true;
+        let mut apply = false;
+        let mut cancel = false;
+        egui::Window::new(tl!("Move to…"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(420.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new(subject.clone()).weak());
+                ui.add_space(4.0);
+                let current = state
+                    .choice
+                    .clone()
+                    .and_then(|id| self.doc.map.node(&id).map(|n| n.text.clone()))
+                    .unwrap_or_else(|| tl!("Choose a new parent").to_string());
+                egui::ComboBox::from_id_salt("move-to").selected_text(current).show_ui(ui, |ui| {
+                    for id in &targets {
+                        let label = self.doc.map.node(id).map(|n| n.text.clone()).unwrap_or_default();
+                        if ui.selectable_label(state.choice.as_deref() == Some(id.as_str()), label).clicked() {
+                            state.choice = Some(id.clone());
+                        }
+                    }
+                });
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(state.choice.is_some(), egui::Button::new(tl!("Move"))).clicked() {
+                        apply = true;
+                    }
+                    if ui.button(tl!("Cancel")).clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if cancel || !open {
+            return;
+        }
+        if apply {
+            if let Some(target) = state.choice.clone() {
+                self.reparent(&state.node, &target);
+            }
+            return;
+        }
+        self.move_to = Some(state);
+    }
+
+    /// The help window: every gesture the app answers to, and what it does.
+    fn help_window(&mut self, ctx: &Context) {
+        if !self.help_open {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new(tl!("Keyboard and mouse"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(true)
+            .default_width(520.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                egui::Grid::new("help-shortcuts").num_columns(2).spacing([18.0, 6.0]).striped(true).show(ui, |ui| {
+                    for (keys, what) in [
+                        ("Tab", tl!("New child of the selected card")),
+                        ("Enter", tl!("New sibling")),
+                        ("F2 / double click", tl!("Edit the card's text")),
+                        ("Delete", tl!("Delete the card and its branch")),
+                        ("Space", tl!("Collapse or expand the branch")),
+                        ("Arrows", tl!("Move the selection through the map")),
+                        ("Alt + Arrows", tl!("Move the card: reorder, indent, outdent")),
+                        ("Ctrl + drag", tl!("Move a card under another one")),
+                        ("Ctrl + Z / Ctrl + Y", tl!("Undo and redo")),
+                        ("Right click", tl!("The card menu: style, note, move, delete")),
+                        ("Drag / scroll", tl!("Pan and zoom the canvas")),
+                        ("Ctrl + S / Ctrl + O", tl!("Save and open a map")),
+                    ] {
+                        ui.label(egui::RichText::new(keys).monospace());
+                        ui.label(what);
+                        ui.end_row();
+                    }
+                });
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(tl!("The maps are .tmind files, the same format the original LocalMind wrote.")).weak());
+            });
+        self.help_open = open;
     }
 }
 
@@ -898,6 +1030,12 @@ pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<Theme> {
             editor.open_note(id);
             ui.close();
         }
+        if ui.add_enabled(has_selection, egui::Button::new(tl!("Move to…"))).clicked()
+            && let Some(id) = &selected
+        {
+            editor.open_move_to(id);
+            ui.close();
+        }
         if ui.add_enabled(has_selection, egui::Button::new(tl!("Delete node"))).clicked()
             && let Some(id) = &selected
         {
@@ -949,6 +1087,7 @@ enum MenuAction {
     Sibling,
     Toggle,
     Note,
+    MoveTo,
     Side(Option<Side>),
     Font(f32),
     ResetWidth,
@@ -1000,9 +1139,19 @@ impl KeysThisFrame {
 /// The input state's `modifiers` follow the platform's raw input, which a synthetic key event (the
 /// headless tests, a remote desktop injecting keys) does not necessarily update, so the events are
 /// consulted as well: the modifier a key was pressed with is on the key event itself.
-fn modifiers_of(ctx: &Context, pick: impl Fn(&egui::Modifiers) -> bool) -> bool {
+/// Whether this frame's input carries `pick` (Ctrl/Cmd, Alt, Shift).
+///
+/// The input state's `modifiers` follow the platform's raw input, which a synthetic event (the
+/// headless tests, a remote desktop injecting keys) does not necessarily update, so the events are
+/// consulted as well: the modifier a key or a click was made with is on the event itself.
+pub(crate) fn modifiers_of(ctx: &Context, pick: impl Fn(&egui::Modifiers) -> bool) -> bool {
     ctx.input(|i| {
-        pick(&i.modifiers) || i.events.iter().any(|event| matches!(event, egui::Event::Key { pressed: true, modifiers, .. } if pick(modifiers)))
+        pick(&i.modifiers)
+            || i.events.iter().any(|event| match event {
+                egui::Event::Key { pressed: true, modifiers, .. } => pick(modifiers),
+                egui::Event::PointerButton { modifiers, .. } => pick(modifiers),
+                _ => false,
+            })
     })
 }
 

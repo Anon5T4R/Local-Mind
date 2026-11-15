@@ -41,6 +41,8 @@ pub fn render(map: &MindMap, colors: &Colors) -> Result<Vec<u8>, String> {
         zoom: SCALE,
         needs_fit: false,
         resizing: None,
+        reparenting: None,
+        arm_reparent: None,
     };
 
     let ctx = egui::Context::default();

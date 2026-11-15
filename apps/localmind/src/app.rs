@@ -118,6 +118,10 @@ impl LocalApp {
             }
             crate::ai::menu(ui, &mut self.editor);
             ui.menu_button(tl!("Help"), |ui| {
+                if ui.button(tl!("Keyboard and mouse")).clicked() {
+                    self.editor.help_open = true;
+                    ui.close();
+                }
                 if ui.button(tl!("Check for Updates.")).clicked() {
                     // The outcome shows in the About window, which is where a check belongs.
                     self.about_open = true;

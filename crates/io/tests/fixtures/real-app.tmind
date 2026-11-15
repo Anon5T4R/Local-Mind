@@ -1,0 +1,94 @@
+{
+  "id": "Ln7lQc6G",
+  "title": "Novo mapa",
+  "createdAt": 1782338174246,
+  "updatedAt": 1782338532061,
+  "nodes": [
+    {
+      "id": "TvZNxhGc",
+      "text": "Mapa Mental",
+      "parentId": null,
+      "width": 120
+    },
+    {
+      "id": "RgBu5ZL-",
+      "text": "Estrutura",
+      "parentId": "TvZNxhGc"
+    },
+    {
+      "id": "g4kScj_2",
+      "text": "Centro Principal",
+      "parentId": "RgBu5ZL-"
+    },
+    {
+      "id": "CZbpjZP4",
+      "text": "Ramos Principais",
+      "parentId": "RgBu5ZL-"
+    },
+    {
+      "id": "SLL8__LV",
+      "text": "Conexões Cruzadas",
+      "parentId": "RgBu5ZL-"
+    },
+    {
+      "id": "xUHdG-fs",
+      "text": "Conteúdo",
+      "parentId": "TvZNxhGc"
+    },
+    {
+      "id": "dJlmdhFc",
+      "text": "Ideias Chave",
+      "parentId": "xUHdG-fs"
+    },
+    {
+      "id": "OIlqFIux",
+      "text": "Dados Relevantes",
+      "parentId": "xUHdG-fs"
+    },
+    {
+      "id": "N_1j4XMn",
+      "text": "Exemplos Práticos",
+      "parentId": "xUHdG-fs"
+    },
+    {
+      "id": "tLbgdJpP",
+      "text": "Design",
+      "parentId": "TvZNxhGc"
+    },
+    {
+      "id": "suQ-MFTe",
+      "text": "Cores Temáticas",
+      "parentId": "tLbgdJpP"
+    },
+    {
+      "id": "KdmFWURV",
+      "text": "Ícones Visuais",
+      "parentId": "tLbgdJpP"
+    },
+    {
+      "id": "3IQ1s6ax",
+      "text": "Espaçamento Limpo",
+      "parentId": "tLbgdJpP"
+    },
+    {
+      "id": "anWdU410",
+      "text": "Navegação",
+      "parentId": "TvZNxhGc"
+    },
+    {
+      "id": "odUDjqP7",
+      "text": "Zoom Dinâmico",
+      "parentId": "anWdU410"
+    },
+    {
+      "id": "h8bL9F9i",
+      "text": "Filtros Rápidos",
+      "parentId": "anWdU410"
+    },
+    {
+      "id": "7nwn1mLG",
+      "text": "Busca Interna",
+      "parentId": "anWdU410"
+    }
+  ]
+}

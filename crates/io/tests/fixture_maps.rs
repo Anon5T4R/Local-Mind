@@ -100,6 +100,27 @@ fn a_duplicated_root_uses_the_first_one_everywhere() {
     assert!(!layout.positions.contains_key("R2"));
 }
 
+/// The file the original app wrote, opened as it is: the fixture is a real `.tmind` saved by the
+/// Electron app (a neutral test map, from `C:\Dev\test-files\LocalMind\`), not a hand-made copy.
+#[test]
+fn a_real_file_from_the_original_app_opens_and_lays_out() {
+    let map = map_io::load(&fixture("real-app.tmind")).expect("the real file opens");
+    assert_eq!(map.title, "Novo mapa");
+    assert_eq!(map.nodes.len(), 17);
+    assert_eq!(map.root().map(|n| n.text.as_str()), Some("Mapa Mental"));
+    // The root carries a custom width: the resize handle was used on it in the original app.
+    assert_eq!(map.root().and_then(|n| n.width), Some(120.0));
+
+    let layout = layout_tree(&map.nodes);
+    assert_eq!(layout.positions.len(), 17, "every node is placed");
+    assert!(layout.bounds(&map.nodes).is_some());
+
+    // Saving it back keeps every field the app wrote.
+    let text = map_io::to_json(&map).expect("serialize");
+    let again = map_io::parse(&text).expect("parse");
+    assert_eq!(map, again);
+}
+
 /// Opening a file that is not a map says why instead of showing an empty canvas.
 #[test]
 fn a_file_that_is_not_a_map_is_an_error() {
