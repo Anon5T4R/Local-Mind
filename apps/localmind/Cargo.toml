@@ -31,6 +31,10 @@ localmind-io = { workspace = true }
 localmind-layout = { workspace = true }
 localmind-model = { workspace = true }
 
+[dev-dependencies]
+# Headless UI tests of the canvas (egui_kittest): the map renders and answers a real click.
+egui_kittest = { workspace = true }
+
 [build-dependencies]
 # Icon + VERSIONINFO for localmind.exe; build.rs only uses it when targeting Windows.
 winresource = "0.1"

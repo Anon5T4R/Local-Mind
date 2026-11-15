@@ -76,8 +76,28 @@ impl CanvasView {
     }
 }
 
-/// What the frame's interaction produced.
-#[derive(Clone, Debug)]
+/// The screen rectangle a card occupies, given the layout and the current view.
+pub fn card_rect(view: &CanvasView, rect: Rect, pos: localmind_layout::Pos, size: (f32, f32)) -> Rect {
+    let min = view.to_screen(view.origin(rect), pos.x, pos.y);
+    Rect::from_min_size(min, vec2(size.0, size.1) * view.zoom)
+}
+
+/// The card under `pointer`, if any. Cards are painted shapes rather than widgets, so the hit test
+/// lives here (and is unit-tested); the selection follows it.
+pub fn hit_test(map: &MindMap, layout: &Layout, view: &CanvasView, rect: Rect, pointer: Pos2) -> Option<String> {
+    let hidden = map.hidden_ids();
+    map.nodes
+        .iter()
+        .filter(|node| !hidden.contains(&node.id))
+        .find(|node| {
+            let Some(pos) = layout.positions.get(&node.id) else { return false };
+            let size = node_size(node);
+            card_rect(view, rect, *pos, (size.w, size.h)).contains(pointer)
+        })
+        .map(|node| node.id.clone())
+}
+
+/// What the frame's interaction produced.#[derive(Clone, Debug)]
 pub struct CanvasOutput {
     /// A card was clicked.
     pub clicked: Option<String>,
@@ -130,22 +150,18 @@ pub fn show(ui: &mut Ui, map: &MindMap, view: &mut CanvasView, selected: Option<
     edges(&painter, map, &layout, &by_id, &hidden, view, origin, &palette);
 
     let mut clicked_card = None;
-    let pointer = ui.input(|i| i.pointer.interact_pos());
     for node in map.nodes.iter().filter(|n| !hidden.contains(&n.id)) {
         let Some(pos) = layout.positions.get(&node.id) else { continue };
         let size = node_size(node);
-        let min = view.to_screen(origin, pos.x, pos.y);
-        let card = Rect::from_min_size(min, vec2(size.w, size.h) * view.zoom);
+        let card = card_rect(view, rect, *pos, (size.w, size.h));
         let is_selected = selected == Some(node.id.as_str());
         draw_card(&painter, card, node, &layout, view, &palette, is_selected, map);
-        if let Some(pointer) = pointer
-            && card.contains(pointer)
-            && response.clicked()
-        {
-            clicked_card = Some(node.id.clone());
-        }
     }
-
+    if response.clicked()
+        && let Some(pointer) = ui.input(|i| i.pointer.interact_pos())
+    {
+        clicked_card = hit_test(map, &layout, view, rect, pointer);
+    }
     if response.clicked() && clicked_card.is_none() {
         out.clicked_empty = true;
     }
@@ -170,10 +186,13 @@ struct Palette {
 impl From<&egui::Visuals> for Palette {
     fn from(visuals: &egui::Visuals) -> Self {
         let accent = visuals.selection.bg_fill;
+        let card = visuals.widgets.inactive.bg_fill;
         Self {
             canvas: visuals.extreme_bg_color,
-            card: visuals.widgets.inactive.bg_fill,
-            card_root: visuals.widgets.hovered.bg_fill,
+            card,
+            // The root is the map's centre: same card, tinted towards the accent, so it reads as the
+            // trunk at a glance without inventing a second palette.
+            card_root: card.lerp_to_gamma(accent, 0.18),
             text: visuals.text_color(),
             edge: visuals.widgets.noninteractive.bg_stroke.color,
             accent,
@@ -272,9 +291,10 @@ fn draw_card(
         if selected { Stroke::new((2.0 * view.zoom).clamp(1.0, 3.0), palette.selection) } else { Stroke::new(1.0, palette.edge.gamma_multiply(0.6)) };
     painter.rect(card, CornerRadius::same(radius as u8), fill, stroke, StrokeKind::Inside);
 
-    // The accent bar: the node's own colour when it has one, else the root/secondary accents.
+    // The accent bar: the node's own colour when it has one, else the root/secondary accents. The
+    // root's is a little heavier, which is what makes the trunk findable in a busy map.
     let accent = node_color(node).unwrap_or(if is_root { palette.accent } else { palette.accent_second });
-    let bar_width = (5.0 * view.zoom).clamp(2.0, 6.0);
+    let bar_width = ((if is_root { 7.0 } else { 5.0 }) * view.zoom).clamp(2.0, 8.0);
     let bar = Rect::from_min_size(card.min, vec2(bar_width, card.height()));
     painter.rect_filled(bar, CornerRadius { nw: radius as u8, sw: radius as u8, ne: 0, se: 0 }, accent);
 
@@ -399,5 +419,48 @@ mod tests {
         let mut view = CanvasView::default();
         view.fit(&map, rect());
         assert_eq!(view.zoom, 1.0);
+    }
+
+    /// Cards are painted, not widgets: the click has to be matched against the geometry, and only
+    /// against the cards that are actually on screen.
+    #[test]
+    fn a_click_lands_on_the_card_under_the_pointer() {
+        let mut map = MindMap::new("t", "central");
+        let root = map.root_id().map(str::to_string).unwrap_or_default();
+        let child = map.add_child(&root, "ramo", None);
+        map.toggle_collapse(&child);
+        let grandchild = map.add_child(&child, "neto", None);
+        map.toggle_collapse(&child);
+
+        let layout = layout_tree(&map.nodes);
+        let view = CanvasView::default();
+        let canvas = rect();
+
+        let center_of = |id: &str| {
+            let node = map.node(id).expect("node");
+            let size = node_size(node);
+            card_rect(&view, canvas, *layout.positions.get(id).expect("placed"), (size.w, size.h)).center()
+        };
+        assert_eq!(hit_test(&map, &layout, &view, canvas, center_of(&root)).as_deref(), Some(root.as_str()));
+        assert_eq!(hit_test(&map, &layout, &view, canvas, center_of(&child)).as_deref(), Some(child.as_str()));
+        // The grandchild is inside a collapsed branch: it has no card, so nothing is hit there.
+        assert!(!layout.positions.contains_key(&grandchild));
+        assert_eq!(hit_test(&map, &layout, &view, canvas, pos2(canvas.right() - 2.0, canvas.bottom() - 2.0)), None);
+    }
+
+    /// A card moved by pan and zoom is hit where it is drawn, not where it was laid out.
+    #[test]
+    fn the_hit_test_follows_pan_and_zoom() {
+        let map = MindMap::new("t", "central");
+        let root = map.root_id().map(str::to_string).unwrap_or_default();
+        let view = CanvasView { zoom: 1.6, pan: vec2(-40.0, 25.0), needs_fit: false };
+        let layout = layout_tree(&map.nodes);
+        let canvas = rect();
+        let node = map.node(&root).expect("root");
+        let size = node_size(node);
+        let card = card_rect(&view, canvas, *layout.positions.get(&root).expect("placed"), (size.w, size.h));
+        assert_eq!(hit_test(&map, &layout, &view, canvas, card.center()).as_deref(), Some(root.as_str()));
+        // Just outside the same card there is nothing to hit.
+        assert_eq!(hit_test(&map, &layout, &view, canvas, card.right_center() + vec2(4.0, 0.0)), None);
     }
 }

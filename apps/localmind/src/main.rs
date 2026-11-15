@@ -19,6 +19,9 @@ mod pickers;
 mod prefs;
 mod suite_entry;
 
+#[cfg(test)]
+mod ui_tests;
+
 use app::LocalApp;
 use suite_entry::APP;
 
