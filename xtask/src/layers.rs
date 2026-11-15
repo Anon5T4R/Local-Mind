@@ -53,9 +53,11 @@ pub const TABLE: &[(&str, Class)] = &[
 ];
 
 /// Explicit orderings *within* a layer (earlier may be used by later).
-pub const INTRA_LAYER_ORDER: &[&[&str]] = &[
-    // e.g. &["geom", "color", "raster"],
-];
+///
+/// `io` and `layout` share L2 (both sit above the model, neither knows about the other's insides).
+/// The compatibility suite reads a real map AND lays it out, so `io`'s dev-dependency on `layout` is
+/// declared here instead of inventing a layer for it.
+pub const INTRA_LAYER_ORDER: &[&[&str]] = &[&["layout", "io"]];
 
 /// The package-name prefix of the app's own crates. A born app renames it with the rest of the
 /// template (`scripts/nascer-app.ps1`).
@@ -252,6 +254,25 @@ mod tests {
     fn the_shipped_table_is_clean() {
         let g = [c("localmind", &[("egui", Normal, false), ("craft-update", Normal, false)]), c("xtask", &[("serde_json", Normal, false)])];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
+    }
+
+    /// The table this app actually ships: the three layers and the one same-layer edge (the
+    /// compatibility suite lays a real map out, so `io`'s dev-dependency on `layout` is declared in
+    /// [`INTRA_LAYER_ORDER`]).
+    #[test]
+    fn the_apps_own_layers_pass_the_rules() {
+        let g = [
+            c("localmind-model", &[("serde", Normal, false)]),
+            c("localmind-layout", &[("localmind-model", Normal, true)]),
+            c("localmind-io", &[("localmind-model", Normal, true), ("localmind-layout", Dev, true)]),
+            c("localmind", &[("localmind-io", Normal, true), ("localmind-layout", Normal, true), ("localmind-model", Normal, true)]),
+        ];
+        assert!(check(&g).is_empty(), "{:?}", check(&g));
+
+        // The order is declared for the pair, not for the dependency kind: the same edge is legal
+        // as a normal dependency too, so the table says what the layers mean, not what cargo does.
+        let normal = [c("localmind-io", &[("localmind-layout", Normal, true)])];
+        assert!(check(&normal).is_empty(), "{:?}", check(&normal));
     }
 
     #[test]
