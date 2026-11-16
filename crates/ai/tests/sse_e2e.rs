@@ -146,6 +146,27 @@ fn a_429_with_a_provider_message_is_surfaced() {
     assert!(error.contains("Insufficient balance"), "{error}");
 }
 
+/// An OpenRouter-style 429: the generic `error.message` is "Provider returned error", but the real
+/// reason is in `error.metadata.raw`, with the upstream provider in `metadata.provider_name`. The
+/// caller (and the banner) gets that, not the generic line.
+#[test]
+fn a_429_with_raw_metadata_shows_the_real_reason() {
+    let body = r#"{"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly.","provider_name":"Google AI Studio"}}}"#;
+    let port = serve(move |socket| {
+        let head = format!(
+            "HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = socket.write_all(head.as_bytes());
+    });
+    let error = local_ai::chat_stream_with_key(&app(), &connection(port), "k", &[Msg::User("oi".into())], &mut |_: &str| {})
+        .expect_err("the 429 is an error");
+    assert!(error.contains("Google AI Studio"), "{error}");
+    assert!(error.contains("temporarily rate-limited upstream"), "{error}");
+    assert!(!error.contains("Provider returned error"), "{error}");
+}
+
 /// The request carries the key as a Bearer header: this is the difference between a 401 and a 200
 /// on a real provider. The server echoes the request text back so the test can inspect it (the key
 /// is a made-up string, never a real one).

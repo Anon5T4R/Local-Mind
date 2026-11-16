@@ -37,6 +37,9 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
   campo a campo: um arquivo com campos que esta versão não conhece é preservado, não reescrito.
   Nó com `width: 0`, raiz duplicada e nó órfão (as armadilhas que o app antigo documenta) abrem sem
   perder nada. Gravação atômica: um erro no meio não deixa o mapa pela metade.
+- **Fechar sem perder o trabalho**: com alterações não salvas, fechar interrompe e abre
+  **Salvar / Não salvar / Cancelar**; Salvar grava (ou pede o caminho) e só então fecha, Cancelar
+  mantém a janela aberta.
 - **Abrir por associação de arquivo**, por argumento (`localmind mapa.tmind`) e arrastando o
   arquivo para a janela.
 - **Interface em português, espanhol, japonês e inglês** (o inglês é a fonte; o idioma segue o

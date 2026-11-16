@@ -24,6 +24,7 @@ virou a suíte deste app em `crates/localmind-*`.
 | F4 (v0.4.0) | IA remota (BYOK via `local-ai`): conexões com chave no keychain, 5 ações, chat com streaming, cancelar/erros | **concluída e publicada** |
 | F5 (v1.0.0) | paridade e polimento: tema claro craft, Ajuda ("Teclado e mouse"), tabela final, fixture de `.tmind` real, docs | **concluída e publicada** |
 | F6 (v1.1.0) | **hot corners** (os "+" nos 4 lados da raiz, paridade), "Mover para…" com **lado** (diálogo, sem arrasto), robustez de IA (banner de erro visível, motivo do provider, timeouts, e2e localhost), preset OpenCode GO corrigido; **Ctrl+arrasto removido** (gesto instável no uso real) | **concluída e publicada** |
+| F6.1 (v1.1.1) | o erro do provider usa o **motivo real** (`error.metadata.raw` + `provider_name`); o 429 de rate-limit da OpenRouter mostra "Google AI Studio: …" em vez de "Provider returned error"; **guardar antes de fechar** (Salvar/Não salvar/Cancelar quando o mapa está sujo) | **concluída e publicada** |
 
 ## Divergências declaradas (não são acidente)
 
@@ -44,6 +45,11 @@ virou a suíte deste app em `crates/localmind-*`.
   v1.1.0**: passava no kittest mas o gesto real não era confiável (um gesto que funciona 95% das
   vezes é pior que nenhum); fica registrado como melhoria futura. Os "+" da raiz (hot corners)
   criam um ramo já na direção certa, e o submenu "Side" muda a direção de um filho da raiz.
+- **Guardar antes de fechar.** O app antigo fechava e perdia o que não estava salvo (só um aviso
+  genérico do navegador, sem controle). Aqui, fechar com o mapa sujo **cancela o close** e abre um
+  modal **Salvar / Não salvar / Cancelar** (o padrão do Word): Salvar grava — ou pede o caminho
+  primeiro — e só fecha se a gravação der certo; Não salvar fecha; Cancelar mantém a janela. Um
+  save-as cancelado não deixa um fechamento pendente. Acréscimo, não paridade.
 - **Arrastar um arquivo para a janela** abre o mapa (o antigo só abria por diálogo/argv).
 - **Temas:** o antigo tem 6 temas por variáveis CSS; aqui as **paletas são as mesmas** (`--bg`, `--panel`, `--accent`, `--canvas-dots`, `--minimap-*` viram os campos de `theme::Colors`) e mudam a janela inteira, o canvas e o minimapa. Além dos seis herdados, um **tema claro** no padrão craft (os cinzas neutros e o azul da suíte). Diferente do antigo: a escolha fica no `prefs.json` e no menu **View → Theme** (o antigo escondia nas Configurações).
 - **Export:** Markdown, HTML, **SVG** e **PNG**. O SVG é acréscimo nosso (vetor, sem rasterizador). O PNG é renderizado pelo **mesmo desenho da tela** (contexto egui off-screen → malhas do epaint → preenchimento em software aqui, com o atlas de fonte), em 2× e comprimido com `miniz_oxide` (Rust puro, já no grafo via `zip`/`flate2`; compressão com nível 6, ~65 KB para um mapa típico). Não há lib de rasterização envolvida.
@@ -137,7 +143,10 @@ O teste real (chave do usuário) expôs defeitos que o mock em processo não via
   caso "free usage reached" no render.
 - **Erro do provider sem motivo**: o `ureq` tratava não-2xx como erro de transporte e descartava o
   corpo com o motivo ("invalid API key", "insufficient balance", "free usage limit"). O agente agora
-  usa `http_status_as_error(false)` e lê o corpo; `provider_error` extrai `error.message`.
+  usa `http_status_as_error(false)` e lê o corpo; `provider_error` prefere `error.metadata.raw`
+  (onde a OpenRouter põe a mensagem do provider upstream), prefixa com `metadata.provider_name` e só
+  cai no `error.message` genérico quando não há raw. Um 429 de rate-limit aparece com o motivo e o
+  provider, não com "Provider returned error".
 - **Sem timeout**: o cliente não tinha deadline de leitura; um stream que não manda `[DONE]` e não
   fecha ficava pendurado. Agora há deadlines de DNS/conexão/envio/headers/corpo (10/10/30/60/120 s),
   e um stream que expira **depois** de já ter texto devolve o texto em vez de perdê-lo.

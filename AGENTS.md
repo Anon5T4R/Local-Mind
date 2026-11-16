@@ -34,7 +34,8 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
   update), `canvas.rs` (desenho e interação do mapa, minimapa, alça de largura, "+" nos 4 lados da
   raiz), `edit.rs` (seleção, texto inline, menu do cartão, nota, "Mover para…" com pai/lado, Ajuda,
   teclado e undo), `ai.rs` (conexões, ações, chat e o strip de status/erro, desenhado antes do
-  canvas), `export.rs`
+  canvas), `close.rs` (o guardar-antes-de-fechar: a máquina de estado do close e o modal
+  Salvar/Não salvar/Cancelar), `export.rs`
   (Markdown/HTML/SVG), `png.rs` (o PNG pela tesselação do epaint), `theme.rs` (os 7 temas, com o
   claro craft), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `i18n.rs`,
   `pickers.rs`, `fonts.rs`, `suite_entry.rs`, `build.rs`

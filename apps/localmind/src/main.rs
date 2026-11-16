@@ -13,6 +13,7 @@
 mod ai;
 mod app;
 mod canvas;
+mod close;
 mod doc;
 mod edit;
 mod export;

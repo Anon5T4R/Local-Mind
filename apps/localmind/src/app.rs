@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use craft_update::updater::{Action, Status, Updater};
 
+use crate::close::{self, Outcome};
 use crate::doc::Document;
 use crate::edit::{self, Editor};
 use crate::i18n;
@@ -40,6 +41,8 @@ pub struct LocalApp {
     prefs: Prefs,
     editor: Editor,
     pending: Option<Pending>,
+    /// The unsaved-changes guard on window close.
+    close: close::Guard,
     /// The last failure, shown until dismissed: a map that could not be read must say so.
     error: Option<String>,
     /// The title currently on the window, so it is only sent when it changes.
@@ -62,6 +65,7 @@ impl LocalApp {
             prefs,
             editor: Editor::new(edit::new_document()),
             pending: None,
+            close: close::Guard::default(),
             error: None,
             window_title: String::new(),
         };
@@ -135,7 +139,7 @@ impl LocalApp {
             });
         });
         if quit {
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            self.request_close(ui.ctx());
         }
     }
 
@@ -274,18 +278,67 @@ impl LocalApp {
     /// Save, asking for a path the first time.
     fn save(&mut self, ctx: &egui::Context) {
         match self.editor.doc.path.clone() {
-            Some(path) => self.save_to(&path),
+            Some(path) => {
+                self.save_to(&path);
+            }
             None => self.ask_save_as(ctx),
         }
     }
 
-    fn save_to(&mut self, path: &Path) {
+    fn save_to(&mut self, path: &Path) -> bool {
         match self.editor.doc.save(path) {
             Ok(()) => {
                 self.editor.mark_saved();
                 self.error = None;
+                true
             }
-            Err(e) => self.error = Some(i18n::tr_fmt("the map could not be saved: {error}", &[("error", &e.to_string())])),
+            Err(e) => {
+                self.error = Some(i18n::tr_fmt("the map could not be saved: {error}", &[("error", &e.to_string())]));
+                false
+            }
+        }
+    }
+
+    /// A close was requested (the window's button, File → Quit, or the update restart). A dirty map
+    /// shows the unsaved-changes prompt instead of closing; the OS close is cancelled by the caller.
+    fn request_close(&mut self, ctx: &egui::Context) {
+        if self.close.request(self.editor.doc.dirty) {
+            // The modal asks; the window stays.
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// "Save" in the unsaved-changes prompt: save to the known path, or ask for one first.
+    fn save_for_close(&mut self, ctx: &egui::Context) {
+        match self.editor.doc.path.clone() {
+            Some(path) => {
+                let ok = self.save_to(&path);
+                if self.close.saved(ok) {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+            None => {
+                self.ask_save_as(ctx);
+                if self.pending != Some(Pending::SaveAs) {
+                    // The picker could not start: there is no save and no close.
+                    self.close.picker_cancelled();
+                }
+            }
+        }
+    }
+
+    /// The unsaved-changes modal, drawn last so it sits above everything.
+    fn close_prompt(&mut self, ui: &mut egui::Ui) {
+        if !self.close.is_confirming() {
+            return;
+        }
+        let Some(choice) = close::prompt(ui) else { return };
+        let ctx = ui.ctx().clone();
+        match self.close.choose(choice) {
+            Outcome::Close => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Outcome::Stay => {}
+            Outcome::SaveThenClose => self.save_for_close(&ctx),
         }
     }
 
@@ -368,12 +421,16 @@ impl LocalApp {
             craft_window::title_bar::empty_area(ui, ui.max_rect());
             ui.horizontal(|ui| {
                 for button in &layout.left {
-                    window_button(ui, *button);
+                    if window_button(ui, *button) {
+                        self.request_close(ui.ctx());
+                    }
                 }
                 self.menus(ui);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     for button in layout.right.iter().rev() {
-                        window_button(ui, *button);
+                        if window_button(ui, *button) {
+                            self.request_close(ui.ctx());
+                        }
                     }
                 });
             });
@@ -424,15 +481,36 @@ impl eframe::App for LocalApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.updater.check_at_start(ctx);
         self.updater.tick(ctx);
+
+        // The window wants to close: a dirty map cancels the close and shows the prompt.
+        if ctx.input(|i| i.viewport().close_requested()) && self.close.request(self.editor.doc.dirty) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
         for picked in self.pickers.take() {
+            let pending = self.pending.take();
             match picked {
-                Picked::File(path) => match self.pending.clone() {
-                    Some(Pending::SaveAs) => self.save_to(&path),
+                Picked::File(path) => match pending {
+                    Some(Pending::SaveAs) => {
+                        let ok = self.save_to(&path);
+                        if self.close.saved(ok) {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    }
                     Some(Pending::Export(kind)) => self.export_to(&path, kind),
                     _ => self.open_path(path),
                 },
             }
         }
+        // A cancelled picker is silence: drop the pending action, and the close that was waiting
+        // for that save (a save-as the user backed out of must not close the window later).
+        if !self.pickers.busy()
+            && let Some(cancelled) = self.pending.take()
+            && cancelled == Pending::SaveAs
+        {
+            self.close.picker_cancelled();
+        }
+
         self.shortcuts(ctx);
         self.take_dropped_files(ctx);
         self.sync_window_title(ctx);
@@ -459,28 +537,33 @@ impl eframe::App for LocalApp {
             Action::OpenUrl(url) => {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(url));
             }
-            // The update is installed: close through the normal path, and the helper restarts us.
-            Action::Close => ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close),
+            // The update is installed: close through the normal path (the guard still asks if the
+            // map is dirty), and the helper restarts us.
+            Action::Close => self.request_close(ui.ctx()),
         }
+
+        // The unsaved-changes modal is the last thing drawn, so it sits above everything.
+        self.close_prompt(ui);
     }
 }
 
-/// One window button of the app-drawn header bar.
-fn window_button(ui: &mut egui::Ui, button: craft_window::Button) {
+/// One window button of the app-drawn header bar. Returns true when the close button was clicked:
+/// the caller routes it through the unsaved-changes guard instead of closing blindly.
+fn window_button(ui: &mut egui::Ui, button: craft_window::Button) -> bool {
     let (label, tooltip) = match button {
         craft_window::Button::Minimize => ("-", tl!("Minimize")),
         craft_window::Button::Maximize => ("[]", tl!("Maximize")),
         craft_window::Button::Close => ("x", tl!("Close")),
     };
     if ui.button(label).on_hover_text(tooltip).clicked() {
-        let command = match button {
-            craft_window::Button::Minimize => egui::ViewportCommand::Minimized(true),
+        match button {
+            craft_window::Button::Minimize => ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
             craft_window::Button::Maximize => {
                 let maximized = ui.input(|i| i.viewport().maximized).unwrap_or(false);
-                egui::ViewportCommand::Maximized(!maximized)
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
             }
-            craft_window::Button::Close => egui::ViewportCommand::Close,
-        };
-        ui.ctx().send_viewport_cmd(command);
+            craft_window::Button::Close => return true,
+        }
     }
+    false
 }
