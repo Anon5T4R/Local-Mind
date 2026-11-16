@@ -611,6 +611,31 @@ fn the_generate_dialog_replaces_the_map_with_the_answer() {
     shot(&mut harness, "ai-generated-map");
 }
 
+/// The AI actions live on the card's own menu, not only in the menubar, and "Color branches" is
+/// there for a card that has children.
+#[test]
+fn the_card_menu_offers_the_ai_actions_and_colour_branches() {
+    let mut harness = harness_with(ai_editor(Ok(r#"{"items":["Um"]}"#)));
+    harness.run_steps(3);
+    let pos = card_center(&harness, "l4ct4t03");
+    right_click(&mut harness, pos);
+    for label in ["Expand with AI", "Expand deep", "Explain", "Rewrite.", "Color branches"] {
+        assert!(harness.query_by_label(label).is_some(), "{label} is missing from the card menu");
+    }
+}
+
+/// Ctrl+Enter on the selected card runs Expand with the AI: the most used action never needs a menu.
+#[test]
+fn ctrl_enter_expands_the_selected_node() {
+    let mut harness = harness_with(ai_editor(Ok(r#"{"items":["Primeiro","Segundo"]}"#)));
+    harness.run_steps(3);
+    click_card(&mut harness, "l4ct4t03");
+    key(&mut harness, egui::Key::Enter, egui::Modifiers::COMMAND);
+    wait_for(&mut harness, |editor| editor.doc.map.children("l4ct4t03").len() == 2);
+    let children: Vec<&str> = harness.state().doc.map.children("l4ct4t03").iter().map(|n| n.text.as_str()).collect();
+    assert_eq!(children, ["Primeiro", "Segundo"]);
+}
+
 /// "Expand" on the selected card adds the model's items as children.
 #[test]
 fn expand_from_the_ai_menu_adds_children() {

@@ -115,6 +115,8 @@ pub struct Ai {
     /// The generate-map dialog: its topic, and the shape it remembers.
     pub generate_topic: Option<String>,
     pub generate_shape: (u8, u8),
+    /// Whether a generated map has its branches coloured by order (the app's palette walk).
+    pub generate_color: bool,
     /// The rewrite dialog: the node and the instruction.
     pub rewrite: Option<(String, String)>,
     /// The last error, shown in the banner.
@@ -136,6 +138,7 @@ impl Ai {
             chat: Chat::default(),
             generate_topic: None,
             generate_shape: (2, 4),
+            generate_color: true,
             rewrite: None,
             error: None,
         }
@@ -379,7 +382,7 @@ impl Editor {
 
     fn apply_ai_outcome(&mut self, request: &Request, outcome: localmind_ai::Outcome) {
         match outcome {
-            localmind_ai::Outcome::NewMap { title, nodes } => self.replace_map(title, nodes),
+            localmind_ai::Outcome::NewMap { title, nodes } => self.replace_map(title, nodes, self.ai.generate_color),
             localmind_ai::Outcome::Nodes { parent, nodes } => self.add_ai_nodes(&parent, nodes),
             localmind_ai::Outcome::Text(text) => match request {
                 Request::Explain { node } => {
@@ -789,6 +792,10 @@ fn generate_dialog(ui: &mut egui::Ui, editor: &mut Editor) {
                 ui.label(crate::tl!("Breadth"));
                 ui.add(egui::DragValue::new(&mut breadth).range(2..=8));
             });
+            let mut color = editor.ai.generate_color;
+            if ui.checkbox(&mut color, crate::tl!("Color branches")).changed() {
+                editor.ai.generate_color = color;
+            }
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 if ui.add_enabled(!topic.trim().is_empty() && !editor.ai.busy(), egui::Button::new(crate::tl!("Generate"))).clicked() {

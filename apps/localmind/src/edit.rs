@@ -24,6 +24,26 @@ use crate::tl;
 
 /// The colours the node menu offers: the same six the original app had.
 pub const COLORS: [&str; 6] = ["#7c5cff", "#3a8dde", "#27ae60", "#e67e22", "#e74c3c", "#e84393"];
+
+/// Paints `parent`'s branches with [`COLORS`] **by order** (the first branch takes the first
+/// colour), descendants included so a branch reads as one colour. Returns whether any node changed.
+/// Deterministic on purpose: the palette walk is the app's, never a model's.
+fn paint_branches(map: &mut localmind_model::MindMap, parent: &str) -> bool {
+    let branches: Vec<String> = map.children(parent).iter().map(|child| child.id.clone()).collect();
+    let mut changed = false;
+    for (index, branch) in branches.iter().enumerate() {
+        let colour = COLORS[index % COLORS.len()].to_string();
+        let mut targets = vec![branch.clone()];
+        targets.extend(map.descendant_ids(branch));
+        for id in targets {
+            if map.node(&id).and_then(|node| node.color.as_deref()) != Some(colour.as_str()) {
+                map.set_color(&id, Some(colour.clone()));
+                changed = true;
+            }
+        }
+    }
+    changed
+}
 /// How much one "A+" / "A-" step changes the card font.
 const FONT_STEP: f32 = 2.0;
 
@@ -601,6 +621,14 @@ impl Editor {
             self.redo();
             return;
         }
+        // Ctrl/Cmd+Enter: the AI expands the selected node (the suite's AI shortcut, so the most
+        // used action never needs the menubar).
+        if command && ctx.input(|i| i.key_pressed(Key::Enter)) {
+            if let Some(node) = self.selected.clone() {
+                self.ai_expand(ctx, &node);
+            }
+            return;
+        }
         // Ctrl/Cmd+<key> belongs to the window's menus (save, open, new): nothing here.
         if command {
             return;
@@ -734,6 +762,24 @@ impl Editor {
                         action = Some(MenuAction::Delete);
                     }
                 }
+                ui.separator();
+                // The AI actions on this card, where the user already is.
+                let idle = !self.ai.busy();
+                if ui.add_enabled(idle, egui::Button::new(tl!("Expand with AI"))).clicked() {
+                    action = Some(MenuAction::AiExpand);
+                }
+                if ui.add_enabled(idle, egui::Button::new(tl!("Expand deep"))).clicked() {
+                    action = Some(MenuAction::AiDeep);
+                }
+                if ui.add_enabled(idle, egui::Button::new(tl!("Explain"))).clicked() {
+                    action = Some(MenuAction::AiExplain);
+                }
+                if ui.add_enabled(idle, egui::Button::new(tl!("Rewrite."))).clicked() {
+                    action = Some(MenuAction::AiRewrite);
+                }
+                if ui.add_enabled(facts.children > 0, egui::Button::new(tl!("Color branches"))).clicked() {
+                    action = Some(MenuAction::ColorBranches);
+                }
             });
         });
 
@@ -759,7 +805,19 @@ impl Editor {
             MenuAction::ResetWidth => self.reset_width(&node),
             MenuAction::Colour(colour) => self.set_color(&node, colour),
             MenuAction::Delete => self.delete(&node),
+            MenuAction::AiExpand => self.ai_expand(ctx, &node),
+            MenuAction::AiDeep => self.ai_deep_expand(ctx, &node),
+            MenuAction::AiExplain => self.ai_explain(ctx, &node),
+            MenuAction::AiRewrite => self.ai.rewrite = Some((node.clone(), String::new())),
+            MenuAction::ColorBranches => self.color_branches(&node),
         }
+    }
+
+    /// Assigns the family's colours to `node`'s branches **by order**, descendants included: a
+    /// deterministic walk of the palette (no AI involved). One undo step.
+    pub fn color_branches(&mut self, node: &str) {
+        let node = node.to_string();
+        self.edit(|map| paint_branches(map, &node));
     }
 
     /// Moves a node (with its subtree) under another card, optionally putting it on a direction of
@@ -987,11 +1045,15 @@ impl ExportKind {
 
 impl Editor {
     /// Replaces the whole map with an AI answer (one undo step).
-    pub(crate) fn replace_map(&mut self, title: String, nodes: Vec<localmind_model::MindNode>) {
+    pub(crate) fn replace_map(&mut self, title: String, nodes: Vec<localmind_model::MindNode>, color_branches: bool) {
         let before = self.doc.map.clone();
         let now = localmind_model::now_ms();
-        self.doc.map =
+        let mut map =
             localmind_model::MindMap { id: localmind_model::new_id(), title, nodes, created_at: now, updated_at: now, extra: Default::default() };
+        if color_branches && let Some(root) = map.root_id().map(str::to_string) {
+            paint_branches(&mut map, &root);
+        }
+        self.doc.map = map;
         self.history.record(before);
         self.doc.dirty = true;
         self.selected = self.doc.root_id();
@@ -1137,6 +1199,11 @@ enum MenuAction {
     ResetWidth,
     Colour(Option<String>),
     Delete,
+    AiExpand,
+    AiDeep,
+    AiExplain,
+    AiRewrite,
+    ColorBranches,
 }
 
 impl Editing {
@@ -1241,6 +1308,47 @@ mod tests {
 
     fn root(editor: &Editor) -> String {
         editor.doc.root_id().expect("root")
+    }
+
+    #[test]
+    fn color_branches_paints_by_order_and_descendants_inherit() {
+        let mut editor = editor();
+        let root = root(&editor);
+        let first = editor.doc.map.add_child(&root, "First", None);
+        let second = editor.doc.map.add_child(&root, "Second", None);
+        let under_first = editor.doc.map.add_child(&first, "Under first", None);
+        editor.color_branches(&root);
+        assert_eq!(editor.doc.map.node(&first).expect("first").color.as_deref(), Some(COLORS[0]));
+        assert_eq!(editor.doc.map.node(&second).expect("second").color.as_deref(), Some(COLORS[1]));
+        assert_eq!(
+            editor.doc.map.node(&under_first).expect("under").color.as_deref(),
+            Some(COLORS[0]),
+            "the branch's colour reaches its descendants"
+        );
+        // One undo step, and it puts the colours back.
+        assert!(editor.can_undo());
+        editor.undo();
+        assert_eq!(editor.doc.map.node(&first).expect("first").color, None);
+        assert_eq!(editor.doc.map.node(&under_first).expect("under").color, None);
+    }
+
+    #[test]
+    fn color_branches_is_deterministic_and_wraps_the_palette() {
+        let mut editor = editor();
+        let root = root(&editor);
+        let ids: Vec<String> = (0..8).map(|index| editor.doc.map.add_child(&root, format!("B{index}"), None)).collect();
+        editor.color_branches(&root);
+        for (index, id) in ids.iter().enumerate() {
+            let expected = COLORS[index % COLORS.len()];
+            assert_eq!(editor.doc.map.node(id).expect("branch").color.as_deref(), Some(expected), "branch {index}");
+        }
+        // Running it again changes nothing: the next undo goes back to before the first call.
+        editor.color_branches(&root);
+        for (index, id) in ids.iter().enumerate() {
+            assert_eq!(editor.doc.map.node(id).expect("branch").color.as_deref(), Some(COLORS[index % COLORS.len()]), "still painted");
+        }
+        editor.undo();
+        assert_eq!(editor.doc.map.node(&ids[0]).expect("branch").color, None, "one undo clears the palette walk");
     }
 
     #[test]
