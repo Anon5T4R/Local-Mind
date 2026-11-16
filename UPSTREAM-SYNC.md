@@ -25,6 +25,7 @@ virou a suíte deste app em `crates/localmind-*`.
 | F5 (v1.0.0) | paridade e polimento: tema claro craft, Ajuda ("Teclado e mouse"), tabela final, fixture de `.tmind` real, docs | **concluída e publicada** |
 | F6 (v1.1.0) | **hot corners** (os "+" nos 4 lados da raiz, paridade), "Mover para…" com **lado** (diálogo, sem arrasto), robustez de IA (banner de erro visível, motivo do provider, timeouts, e2e localhost), preset OpenCode GO corrigido; **Ctrl+arrasto removido** (gesto instável no uso real) | **concluída e publicada** |
 | F6.1 (v1.1.1) | o erro do provider usa o **motivo real** (`error.metadata.raw` + `provider_name`); o 429 de rate-limit da OpenRouter mostra "Google AI Studio: …" em vez de "Provider returned error"; **guardar antes de fechar** (Salvar/Não salvar/Cancelar quando o mapa está sujo) | **concluída e publicada** |
+| F6.2 (v1.1.2) | **Gemini**: "Fetch models" usa a rota nativa `/v1beta/models` (o `/openai/models` é 404); **OpenCode Go**: a recipe validada do client (base `/inference/go/openai/v1`, `x-opencode-session` = UUID por request, `Content-Type` JSON), conexões antigas migradas da base Zen; auth/billing do Go/Zen documentado | **concluída e publicada** |
 
 ## Divergências declaradas (não são acidente)
 
@@ -153,10 +154,25 @@ O teste real (chave do usuário) expôs defeitos que o mock em processo não via
 - **e2e permanente em localhost**: `crates/ai/tests/sse_e2e.rs` sobe um `TcpListener` que responde
   SSE OpenAI-shaped e cobre sucesso (texto → mapa), 401, 429, erro de quota dentro de 200 e o header
   `Authorization`. É o teste que o mock não era.
-- **Preset OpenCode GO**: apontava para a base do **Zen** (`/zen/v1`) e não mandava
-  `x-opencode-session`; a base correta do Go é `https://opencode.ai/inference/go/openai/v1`, com o
-  header de sessão e User-Agent do app. O Go exige **chave pessoal** (chave de time é recusada) e o
-  Zen exige créditos; o app agora mostra o motivo exato em vez de "nada".
+- **OpenCode Go (v1.1.2)**: a recipe validada (a extensão do usuário que usava Go com API key há um
+  mês) é base `https://opencode.ai/inference/go/openai/v1`, `x-opencode-session` = **UUID aleatório
+  por request** (`crypto.randomUUID()`), `Content-Type: application/json` e Bearer. Sem o session o
+  gateway responde 400 `MissingSessionID` e a request cai no billing Models; a conexão antiga (base
+  Zen) é migrada para a base Go no load. O Zen é `https://opencode.ai/zen/v1`, sem o header de Go e
+  com os ids `…-free`.
+- **Gemini (v1.1.2)**: o compat `/v1beta/openai/models` é **404**; o "Fetch models" usa a rota nativa
+  `/v1beta/models` com `x-goog-api-key`, filtra `generateContent` e tira o prefixo `models/`.
+
+**Auth e billing do OpenCode (fonte):** o client do opencode autentica no Console por **OAuth**
+(`packages/core/src/plugin/provider/opencode.ts`, método "OpenCode Console account"); a alternativa
+de key é rotulada **"API key (service account)"** (`opencode.ts:470`). Um service account **não tem
+budget** e o Console recusa a key com 403 (`usage-limits.ts:105`); o Go Teams não cobre service
+accounts (docs). O provider `opencode` do client usa `https://opencode.ai/inference/systemone/v1`
+(`packages/ai/src/providers/opencode.ts:8`) — um protocolo próprio, não OpenAI-chat. **Conclusão:** o
+plano Go/Zen é da **conta** (OAuth) ou de uma **key pessoal** do workspace Personal; key de
+time/service-account (a do João, `org_…`) não carrega o plano e responde "Insufficient balance". O
+`local-ai` não replica o OAuth (proprietário); para o app, use uma key **pessoal** do Go ou outro
+provider (OpenRouter/Groq/Gemini/etc.).
 
 O `local-ai` mudou (timeouts, `provider_error`, `chat_stream_with_key` aditivo, preset Go); os
 espelhos dos irmãos (office/pdf/obsidian) precisam do mesmo sync antes de reler a fonte.

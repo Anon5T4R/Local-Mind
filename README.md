@@ -25,7 +25,9 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
   instrução, e um chat com streaming que insere a resposta como nó ou ramo. Sem motor local: os
   modelos são os do provedor que você configurar. **Toda falha do provedor aparece num banner com o
   motivo** (chave inválida, cota esgotada, saldo, rota) e o tempo decorrido fica visível; um stream
-  que para de responder termina em erro, não em espera silenciosa.
+  que para de responder termina em erro, não em espera silenciosa. Provedores como **OpenCode
+  Go/Zen** exigem uma **key pessoal** do workspace Personal: key de time/service-account não carrega
+  o plano e o banner explica isso.
 - **Minimapa** no canto inferior direito, com o viewport marcado e clique/arrasto para navegar.
 - **Export** em Markdown, HTML, SVG e PNG (View/Arquivo → Exportar). O HTML leva as cores do tema;
   o PNG é o mesmo desenho da tela em 2×.

@@ -167,6 +167,54 @@ fn a_429_with_raw_metadata_shows_the_real_reason() {
     assert!(!error.contains("Provider returned error"), "{error}");
 }
 
+/// Gemini's OpenAI-compatible base has no `/models` route; the list must go to the native
+/// `/v1beta/models` with `x-goog-api-key`, and its ids drop the `models/` prefix. This is the route
+/// the live service answers 404 on when pointed at `…/openai/models`.
+#[test]
+fn gemini_models_use_the_native_route_and_key_header() {
+    use std::sync::mpsc;
+
+    let (tx, rx) = mpsc::channel::<String>();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind a local port");
+    let port = listener.local_addr().expect("local address").port();
+    std::thread::spawn(move || {
+        if let Ok((mut socket, _)) = listener.accept() {
+            let mut request = Vec::new();
+            let mut buffer = [0u8; 1024];
+            while let Ok(read) = socket.read(&mut buffer) {
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let _ = tx.send(String::from_utf8_lossy(&request).to_string());
+            let body = r#"{"models":[{"name":"models/gemini-2.5-flash","supportedGenerationMethods":["generateContent"]},{"name":"models/gemini-embedding-001","supportedGenerationMethods":["embedContent"]}]}"#;
+            let head =
+                format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+            let _ = socket.write_all(head.as_bytes());
+            let _ = socket.flush();
+            let _ = socket.shutdown(std::net::Shutdown::Write);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+
+    let connection = Connection {
+        id: "g".into(),
+        provider: "gemini".into(),
+        label: "Gemini".into(),
+        base_url: format!("http://127.0.0.1:{port}/v1beta/openai"),
+        model: String::new(),
+    };
+    let models = local_ai::list_models_with_key(&app(), &connection, "test-key").expect("the native list");
+    assert_eq!(models, ["gemini-2.5-flash"], "only chat models, without the models/ prefix");
+    let request = rx.recv_timeout(std::time::Duration::from_secs(2)).expect("the server saw the request");
+    assert!(request.starts_with("GET /v1beta/models "), "the native route: {request}");
+    assert!(request.to_ascii_lowercase().contains("x-goog-api-key: test-key"), "the Google key header: {request}");
+}
+
 /// The request carries the key as a Bearer header: this is the difference between a 401 and a 200
 /// on a real provider. The server echoes the request text back so the test can inspect it (the key
 /// is a made-up string, never a real one).
