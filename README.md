@@ -20,9 +20,11 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 - **Sete temas nomeados** (o escuro padrão, **Claro** no padrão craft, Natureza, Azul escuro, Verde
   calmo, Rosa pastel e PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o
   canvas e o minimapa mudam juntos, e a escolha fica salva.
-- **IA com a sua chave** (menu **AI**): conexões com preset de provedor e chave no keychain do
+- **IA com a sua chave** (menu **AI**): conexão com preset de provedor e chave no keychain do
   sistema; gerar mapa de um tema ou de um texto, expandir, expandir fundo, explicar, reescrever com
-  instrução, e um chat com streaming que insere a resposta como nó ou ramo. Sem motor local: os
+  instrução, e um chat com streaming que insere a resposta como nó ou ramo. **O chat lê o mapa**:
+  o outline dos nós vai como contexto (com orçamento e o chip mostrando o que foi enviado). Sem
+  motor local: os
   modelos são os do provedor que você configurar. **Toda falha do provedor aparece num banner com o
   motivo** (chave inválida, cota esgotada, saldo, rota) e o tempo decorrido fica visível; um stream
   que para de responder termina em erro, não em espera silenciosa. Provedores como **OpenCode
