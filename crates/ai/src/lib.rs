@@ -20,7 +20,9 @@
 pub mod actions;
 pub mod backend;
 pub mod extract;
+pub mod outline;
 pub mod prompts;
 
 pub use actions::{Outcome, Request};
 pub use backend::{Backend, LiveBackend};
+pub use outline::{MAP_BUDGET, Outline, map_outline};

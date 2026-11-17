@@ -19,6 +19,8 @@ repository = "https://github.com/Anon5T4R/Local-Mind"
 # app's own settings). Add the line back when the first crate needs it.
 craft-i18n = { path = "libs/craft-libs/crates/i18n/" }
 craft-update = { version = "=0.1.0", path = "libs/craft-libs/crates/update/", features = ["egui", "icons"] }
+# The suite's AI surface (connections form, status strip, chat panel). Source: local-libs.
+craft-ai-ui = { path = "libs/craft-libs/crates/ai-ui/" }
 craft-window = { path = "libs/craft-libs/crates/window/", features = ["egui"] }
 
 # the app's own layers (crates/localmind-*)

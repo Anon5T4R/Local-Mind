@@ -1,17 +1,24 @@
-//! The AI surface: connections, the actions, the status strip and the chat.
+//! The AI surface: connections, the actions, the map as the chat's context, and the chat itself.
 //!
 //! Everything the user configures is a [`local_ai::Connection`] (provider preset, base URL, model)
 //! plus a key that lives in the OS keychain. The actions turn the map into a [`Request`], the model
 //! answers on a worker thread (so the window keeps painting), and the answer becomes nodes through
 //! [`localmind_ai::actions::interpret`] - always as one undo step.
 //!
+//! The chat panel and the connections form are `craft-ai-ui` (the suite's AI surface, shared with
+//! the other apps). What the app adds is what only the app knows: the system prompt, and the map -
+//! its outline travels as the panel's context, so the model can answer about the map the user is
+//! looking at instead of talking in the abstract.
+//!
 //! No test opens a socket: [`Ai::backend`] is a trait object, and the UI tests inject a mock. The
-//! keychain is only touched by the connection dialog.
+//! keychain is only touched by the connection form.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
+use ai_ui::ContextKind;
+use craft_ai_ui as ai_ui;
 use local_ai::{Connection, Msg};
 
 use localmind_ai::Backend;
@@ -49,69 +56,27 @@ struct Fetching {
     rx: Receiver<Result<Vec<String>, String>>,
 }
 
-/// A connection being edited (new or existing).
-pub struct Draft {
-    pub id: String,
-    pub provider: String,
-    pub label: String,
-    pub base_url: String,
-    pub model: String,
-    /// The key typed in this dialog; "Save key" writes it to the keychain.
-    pub key: String,
-    pub key_saved: bool,
-}
-
-/// One chat turn.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ChatTurn {
-    pub role: Role,
-    pub text: String,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Role {
-    User,
-    Assistant,
-}
-
-/// The chat panel.
-#[derive(Default)]
-pub struct Chat {
-    pub open: bool,
-    pub messages: Vec<ChatTurn>,
-    pub input: String,
-    /// The answer being streamed.
-    pub streaming: String,
-    pub busy: bool,
-}
-
-impl Chat {
-    /// The conversation as the client's messages: the chat system turn plus every exchange.
-    pub fn history(&self, lang: &str) -> Vec<Msg> {
-        let mut out = vec![Msg::System(actions::chat_system(lang))];
-        out.extend(self.messages.iter().map(|turn| match turn.role {
-            Role::User => Msg::User(turn.text.clone()),
-            Role::Assistant => Msg::Assistant(turn.text.clone()),
-        }));
-        out
-    }
-}
-
 /// The AI state: who it talks to, what dialog is open, and what is in flight.
 pub struct Ai {
     pub backend: Arc<dyn Backend>,
-    pub connections: Vec<Connection>,
-    /// The connection the actions use.
-    pub active: Option<String>,
-    pub panel: bool,
-    pub draft: Option<Draft>,
-    /// Whether each connection has a key in the keychain, by id.
-    pub keys: std::collections::BTreeMap<String, bool>,
-    running: Option<Running>,
+    /// The connection in use, from the suite's store (one, like the other apps of the suite).
+    connection: Option<Connection>,
+    /// Whether the store was read already (once: the panel is drawn every frame).
+    loaded: bool,
+    /// Whether the connections form is open.
+    pub settings_open: bool,
+    connections: ai_ui::ConnectionsPanel,
+    /// The chat: the suite's panel, with the map as its context.
+    panel: ai_ui::ChatPanel,
+    /// Whether the chat is open (it takes width from the map area).
+    pub chat_open: bool,
+    /// The interface language the system prompt was written for, so it is only rebuilt on a change.
+    system_lang: String,
+    /// The outline last handed to the panel: the map is only read again when it changes.
+    context: Option<String>,
+    /// The models the provider answered with, filling the form's list.
     fetching: Option<Fetching>,
-    /// The model list fetched for the draft.
-    pub models: Vec<String>,
-    pub chat: Chat,
+    running: Option<Running>,
     /// The generate-map dialog: its topic, and the shape it remembers.
     pub generate_topic: Option<String>,
     pub generate_shape: (u8, u8),
@@ -125,17 +90,22 @@ pub struct Ai {
 
 impl Ai {
     pub fn new(backend: Arc<dyn Backend>) -> Self {
+        let mut panel = ai_ui::ChatPanel::default();
+        // The last 8 turns and one budget for everything that leaves: the map's outline plus the
+        // conversation. The map gets the larger share (it is what the user asks about).
+        panel.set_policy(ai_ui::WindowPolicy { turns: ai_ui::Turns::LastN(8), total_budget_chars: localmind_ai::MAP_BUDGET + 12_000 });
         Self {
             backend,
-            connections: Vec::new(),
-            active: None,
-            panel: false,
-            draft: None,
-            keys: Default::default(),
-            running: None,
+            connection: None,
+            loaded: false,
+            settings_open: false,
+            connections: ai_ui::ConnectionsPanel::default(),
+            panel,
+            chat_open: false,
+            system_lang: String::new(),
+            context: None,
             fetching: None,
-            models: Vec::new(),
-            chat: Chat::default(),
+            running: None,
             generate_topic: None,
             generate_shape: (2, 4),
             generate_color: true,
@@ -149,29 +119,28 @@ impl Ai {
         local_ai::App { id: AI_APP_ID, url: AI_APP_URL }
     }
 
-    /// Reads the saved connections (a missing file is no connections).
+    /// Reads the saved connection, if there is one (once: the panel is drawn every frame).
     pub fn load(&mut self) {
+        if self.loaded {
+            return;
+        }
+        self.loaded = true;
         match Connection::load_all(&self.app()) {
-            Ok(connections) => {
-                self.connections = connections;
-                self.active = self.active.clone().or_else(|| self.connections.first().map(|c| c.id.clone()));
-                self.refresh_keys();
-            }
+            Ok(connections) => self.connection = connections.into_iter().next(),
             Err(error) => self.error = Some(format!("the AI connections could not be read: {error}")),
         }
     }
 
-    /// Writes the connections (the keys stay in the keychain).
-    pub fn save(&mut self) {
-        if let Err(error) = Connection::save_all(&self.app(), &self.connections) {
-            self.error = Some(format!("the AI connections could not be saved: {error}"));
-        }
+    /// The connection in use, replaced by the tests (the form saves through the keychain).
+    #[cfg(test)]
+    pub fn use_connection(&mut self, connection: Option<Connection>) {
+        self.connection = connection;
+        self.loaded = true;
     }
 
-    /// The connection the actions use: the active one, else the first saved one.
+    /// The connection the calls use.
     pub fn connection(&self) -> Option<&Connection> {
-        let id = self.active.as_deref().or_else(|| self.connections.first().map(|c| c.id.as_str()))?;
-        self.connections.iter().find(|c| c.id == id).or_else(|| self.connections.first())
+        self.connection.as_ref()
     }
 
     /// Whether an answer is in flight.
@@ -193,17 +162,64 @@ impl Ai {
         self.running.as_ref().map(|running| running.started.elapsed().as_secs()).unwrap_or(0)
     }
 
-    /// Whether a connection has a key (the cache is filled when the panel opens).
-    pub fn key_of(&self, id: &str) -> bool {
-        self.keys.get(id).copied().unwrap_or(false)
+    /// Writes the connection (the key stays in the keychain) and keeps it in use.
+    fn save(&mut self, draft: ai_ui::ConnectionDraft, key: String) {
+        let connection = connection_of(&draft);
+        if let Err(error) = connection.set_key(&self.app(), &key) {
+            self.connections.failed(error);
+            return;
+        }
+        match Connection::save_all(&self.app(), std::slice::from_ref(&connection)) {
+            Ok(()) => {
+                self.connection = Some(connection);
+                self.panel.clear();
+                self.connections.saved();
+                self.settings_open = false;
+            }
+            Err(error) => self.connections.failed(error),
+        }
     }
 
-    /// Re-reads the keychain for every connection.
-    pub fn refresh_keys(&mut self) {
-        let app = self.app();
-        for connection in &self.connections {
-            let has = connection.has_key(&app);
-            self.keys.insert(connection.id.clone(), has);
+    /// Asks the provider for its model list, on a worker thread.
+    fn fetch_models(&mut self, draft: ai_ui::ConnectionDraft, key: String) {
+        if self.fetching.is_some() {
+            return;
+        }
+        let connection = connection_of(&draft);
+        if let Err(error) = connection.set_key(&self.app(), &key) {
+            self.connections.failed(error);
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let backend = self.backend.clone();
+        std::thread::Builder::new()
+            .name("localmind-ai-models".into())
+            .spawn(move || {
+                let _ = tx.send(backend.models(&connection));
+            })
+            .ok();
+        self.fetching = Some(Fetching { rx });
+    }
+
+    /// The connections form: the suite's dialog, with this app's store and keychain behind it.
+    pub fn settings(&mut self, ctx: &egui::Context) {
+        if !self.settings_open {
+            self.connections.open = false;
+            return;
+        }
+        if !self.connections.open {
+            self.connections.set_presets(presets());
+            self.connections.open_with(self.connection.as_ref().map(draft_of));
+        }
+        let labels = form_labels();
+        match self.connections.show(ctx, &labels) {
+            ai_ui::ConnectionsIntent::None => {}
+            ai_ui::ConnectionsIntent::Cancel => {
+                self.connections.open = false;
+                self.settings_open = false;
+            }
+            ai_ui::ConnectionsIntent::Save(draft, key) => self.save(draft, key),
+            ai_ui::ConnectionsIntent::LoadModels(draft, key) => self.fetch_models(draft, key),
         }
     }
 }
@@ -240,22 +256,38 @@ impl Editor {
         self.ai_start(ctx, Some(Request::Rephrase { node: node.to_string(), instruction }));
     }
 
-    /// Sends the chat input (streamed into a bubble, never interpreted as nodes).
+    /// Asks a question the chat did not type: the tests drive the whole send path with it.
+    #[cfg(test)]
+    pub fn ai_ask(&mut self, ctx: &egui::Context, question: impl Into<String>) {
+        // The answer is a bubble: the panel opens so it is seen.
+        self.ai.chat_open = true;
+        prepare(self);
+        if self.ai.panel.ask(question) {
+            self.ai_send_chat(ctx);
+        }
+    }
+
+    /// Sends the chat input (the panel already recorded the turn; the answer is a bubble, never
+    /// interpreted as nodes).
     pub fn ai_send_chat(&mut self, ctx: &egui::Context) {
-        let text = self.ai.chat.input.trim().to_string();
-        if text.is_empty() || self.ai.busy() {
+        if self.ai.busy() {
             return;
         }
+        let Some(lines) = self.ai.panel.take_request() else { return };
         if self.ai.connection().is_none() {
-            self.ai.error = Some(crate::tl!("No AI connection yet. Open AI > Connections… and add one.").to_string());
+            // The typed question stays in the panel, with the reason and Retry beside it.
+            self.ai.panel.finish(Err(crate::tl!("No AI connection yet. Open AI > Connections… and add one.").to_string()));
             return;
         }
-        self.ai.chat.messages.push(ChatTurn { role: Role::User, text });
-        self.ai.chat.input.clear();
-        self.ai.chat.streaming.clear();
-        self.ai.chat.busy = true;
-        let history = self.ai.chat.history(crate::i18n::code());
-        self.ai_spawn(ctx, history, None, crate::tl!("Chat").to_string());
+        let messages = lines
+            .into_iter()
+            .map(|line| match line.role {
+                ai_ui::Role::System => Msg::System(line.text),
+                ai_ui::Role::User => Msg::User(line.text),
+                ai_ui::Role::Assistant => Msg::Assistant(line.text),
+            })
+            .collect();
+        self.ai_spawn(ctx, messages, None, crate::tl!("Chat").to_string());
     }
 
     /// Starts one request: the messages come from the action (or from the chat), the answer streams
@@ -312,35 +344,37 @@ impl Editor {
         if let Some(running) = self.ai.running.take() {
             running.cancelled.store(true, Ordering::Relaxed);
         }
-        self.ai.chat.busy = false;
-        self.ai.chat.streaming.clear();
+        self.ai.panel.stopped();
     }
 
     /// Polls the worker and applies what it finished. Called every frame.
     pub fn ai_tick(&mut self) {
-        let Some(running) = self.ai.running.as_mut() else { return };
-        let mut finished = None;
         let mut deltas = String::new();
-        loop {
-            match running.rx.try_recv() {
-                Ok(Event::Delta(delta)) => {
-                    running.partial.push_str(&delta);
-                    deltas.push_str(&delta);
-                }
-                Ok(Event::Done(result)) => {
-                    finished = Some(result);
-                    break;
-                }
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    finished = Some(Err("the AI worker stopped".into()));
-                    break;
+        let mut finished = None;
+        {
+            let Some(running) = self.ai.running.as_mut() else { return };
+            loop {
+                match running.rx.try_recv() {
+                    Ok(Event::Delta(delta)) => {
+                        running.partial.push_str(&delta);
+                        deltas.push_str(&delta);
+                    }
+                    Ok(Event::Done(result)) => {
+                        finished = Some(result);
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        finished = Some(Err("the AI worker stopped".into()));
+                        break;
+                    }
                 }
             }
         }
-        let request = running.request.clone();
-        if !deltas.is_empty() && self.ai.chat.busy {
-            self.ai.chat.streaming.push_str(&deltas);
+        let request = self.ai.running.as_ref().and_then(|running| running.request.clone());
+        let chat = self.ai.running.as_ref().is_some_and(|running| running.request.is_none());
+        if !deltas.is_empty() && chat {
+            self.ai.panel.push(&deltas);
         }
         if let Some(result) = finished {
             self.ai_finish_if_done(result, request);
@@ -349,34 +383,25 @@ impl Editor {
 
     fn ai_finish_if_done(&mut self, result: Result<String, String>, request: Option<Request>) {
         let Some(running) = self.ai.running.take() else { return };
+        if request.is_none() {
+            // The chat: the answer is a bubble, not nodes.
+            self.ai.panel.finish(result);
+            return;
+        }
         if running.cancelled.load(Ordering::Relaxed) {
-            self.ai.chat.busy = false;
-            self.ai.chat.streaming.clear();
             return;
         }
         let answer = match result {
             Ok(answer) => answer,
             Err(error) => {
                 self.ai.error = Some(error);
-                self.ai.chat.busy = false;
-                self.ai.chat.streaming.clear();
                 return;
             }
         };
-        if request.is_none() {
-            // The chat: the answer is a bubble, not nodes.
-            self.ai.chat.messages.push(ChatTurn { role: Role::Assistant, text: answer });
-            self.ai.chat.streaming.clear();
-            self.ai.chat.busy = false;
-            return;
-        }
         let Some(request) = request else { return };
         match actions::interpret(&request, &answer) {
             Ok(outcome) => self.apply_ai_outcome(&request, outcome),
-            Err(error) => {
-                self.ai.error = Some(error);
-                self.ai.chat.busy = false;
-            }
+            Err(error) => self.ai.error = Some(error),
         }
     }
 
@@ -417,84 +442,16 @@ impl Editor {
         }
     }
 
-    /// Adds or updates the connection being edited and activates it.
-    pub fn ai_save_connection(&mut self, draft: Draft) {
-        let connection = Connection {
-            id: draft.id.clone(),
-            provider: draft.provider.clone(),
-            label: draft.label.clone(),
-            base_url: draft.base_url.trim().to_string(),
-            model: draft.model.trim().to_string(),
-        };
-        match self.ai.connections.iter_mut().find(|existing| existing.id == draft.id) {
-            Some(existing) => *existing = connection,
-            None => self.ai.connections.push(connection),
-        }
-        self.ai.active = Some(draft.id.clone());
-        self.ai.draft = None;
-        self.ai.save();
-        self.ai.refresh_keys();
-    }
-
-    /// Writes the key of the draft's connection to the keychain.
-    pub fn ai_save_key(&mut self, draft: &mut Draft) {
-        let app = self.ai.app();
-        let connection = Connection {
-            id: draft.id.clone(),
-            provider: draft.provider.clone(),
-            label: draft.label.clone(),
-            base_url: draft.base_url.clone(),
-            model: draft.model.clone(),
-        };
-        if draft.key.trim().is_empty() {
-            if let Err(error) = connection.clear_key(&app) {
-                self.ai.error = Some(format!("the key could not be removed: {error}"));
-            }
-            draft.key_saved = false;
-        } else if let Err(error) = connection.set_key(&app, draft.key.trim()) {
-            self.ai.error = Some(format!("the key could not be saved: {error}"));
-        } else {
-            draft.key.clear();
-            draft.key_saved = true;
-        }
-        self.ai.refresh_keys();
-    }
-
-    /// Asks the provider for its model list (on a worker thread).
-    pub fn ai_fetch_models(&mut self, ctx: &egui::Context, draft: &Draft) {
-        if self.ai.fetching.is_some() {
-            return;
-        }
-        let connection = Connection {
-            id: draft.id.clone(),
-            provider: draft.provider.clone(),
-            label: draft.label.clone(),
-            base_url: draft.base_url.clone(),
-            model: draft.model.clone(),
-        };
-        let (tx, rx) = std::sync::mpsc::channel();
-        let backend = self.ai.backend.clone();
-        let worker_ctx = ctx.clone();
-        std::thread::Builder::new()
-            .name("localmind-ai-models".into())
-            .spawn(move || {
-                let _ = tx.send(backend.models(&connection));
-                worker_ctx.request_repaint();
-            })
-            .ok();
-        self.ai.fetching = Some(Fetching { rx });
-    }
-
     /// Polls the model fetch. Called every frame.
     pub fn ai_tick_models(&mut self) {
         let Some(fetching) = self.ai.fetching.as_mut() else { return };
         match fetching.rx.try_recv() {
             Ok(Ok(models)) => {
-                self.ai.models = models;
+                self.ai.connections.models = models;
                 self.ai.fetching = None;
             }
             Ok(Err(error)) => {
-                self.ai.error = Some(error);
+                self.ai.connections.failed(error);
                 self.ai.fetching = None;
             }
             Err(TryRecvError::Empty) => {}
@@ -503,10 +460,11 @@ impl Editor {
     }
 }
 
-/// The AI menus, dialogs and chat. Called by the editor every frame (the status strip is drawn
-/// before the canvas, so it stays visible).
+/// The AI menus and dialogs. Called by the editor every frame (the status strip is drawn before the
+/// canvas, so it stays visible).
 pub fn ui(ui: &mut egui::Ui, editor: &mut Editor) {
-    connections_panel(ui, editor);
+    let ctx = ui.ctx().clone();
+    editor.ai.settings(&ctx);
     generate_dialog(ui, editor);
     rewrite_dialog(ui, editor);
 }
@@ -547,12 +505,13 @@ pub fn menu(ui: &mut egui::Ui, editor: &mut Editor) {
         }
         ui.separator();
         if ui.add_enabled(!editor.ai.busy(), egui::Button::new(crate::tl!("Chat"))).clicked() {
-            editor.ai.chat.open = true;
+            editor.ai.chat_open = true;
+            editor.ai.load();
             ui.close();
         }
         if ui.button(crate::tl!("Connections…")).clicked() {
-            editor.ai.panel = true;
-            editor.ai.refresh_keys();
+            editor.ai.load();
+            editor.ai.settings_open = true;
             ui.close();
         }
     });
@@ -591,184 +550,136 @@ pub(crate) fn status_strip(ui: &mut egui::Ui, editor: &mut Editor) {
     }
 }
 
-fn connections_panel(ui: &mut egui::Ui, editor: &mut Editor) {
-    if !editor.ai.panel {
+/// Hands the panel what only this app can say: the system prompt (once per language) and the map's
+/// outline as its context (only when the outline changed).
+fn prepare(editor: &mut Editor) {
+    let lang = crate::i18n::code();
+    if editor.ai.system_lang != lang {
+        editor.ai.panel.set_system(actions::chat_system(lang));
+        editor.ai.system_lang = lang.to_string();
+    }
+    let outline = localmind_ai::map_outline(&editor.doc.map, localmind_ai::MAP_BUDGET);
+    if editor.ai.context.as_deref() != Some(outline.text.as_str()) {
+        let label = crate::i18n::tr_fmt(crate::tl!("the map · nodes: {nodes}"), &[("nodes", &outline.nodes.to_string())]);
+        let context = if outline.text.trim().is_empty() {
+            None
+        } else {
+            Some(ai_ui::ContextSource::new(ContextKind::Custom, label, outline.text.clone(), localmind_ai::MAP_BUDGET, ai_ui::Side::Head))
+        };
+        editor.ai.panel.set_context(context);
+        editor.ai.context = Some(outline.text);
+    }
+}
+
+/// The chat, as a side panel of the map area: the suite's panel over this app's chat plumbing.
+pub fn chat_panel(ui: &mut egui::Ui, editor: &mut Editor) {
+    if !editor.ai.chat_open {
         return;
     }
     let ctx = ui.ctx().clone();
-    let mut open = true;
-    egui::Window::new(crate::tl!("AI connections"))
-        .open(&mut open)
-        .collapsible(false)
-        // Auto-sized: a resizable window keeps its first size and would clip the connection form.
-        .resizable(false)
-        .default_width(560.0)
-        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
-        .show(&ctx, |ui| connections_body(ui, editor));
-    editor.ai.panel = open;
-}
-
-fn connections_body(ui: &mut egui::Ui, editor: &mut Editor) {
-    ui.label(
-        egui::RichText::new(crate::tl!(
-            "The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something."
-        ))
-        .weak(),
-    );
-    ui.add_space(6.0);
-    let mut activate = None;
-    let mut edit = None;
-    let mut remove = None;
-    for connection in editor.ai.connections.clone() {
-        ui.horizontal(|ui| {
-            let active = editor.ai.active.as_deref() == Some(connection.id.as_str());
-            if ui.radio(active, format!("{} — {}", connection.label, connection.model)).clicked() {
-                activate = Some(connection.id.clone());
-            }
-            if editor.ai.key_of(&connection.id) {
-                ui.label(egui::RichText::new(crate::tl!("key saved")).weak());
-            }
-            if ui.button(crate::tl!("Edit")).clicked() {
-                edit = Some(connection.clone());
-            }
-            if ui.button(crate::tl!("Remove")).clicked() {
-                remove = Some(connection.id.clone());
-            }
-        });
-    }
-    if let Some(id) = activate {
-        editor.ai.active = Some(id);
-    }
-    if let Some(connection) = edit {
-        editor.ai.draft = Some(Draft {
-            id: connection.id.clone(),
-            provider: connection.provider.clone(),
-            label: connection.label.clone(),
-            base_url: connection.base_url.clone(),
-            model: connection.model.clone(),
-            key: String::new(),
-            key_saved: editor.ai.key_of(&connection.id),
-        });
-        editor.ai.models.clear();
-    }
-    if let Some(id) = remove {
-        editor.ai.connections.retain(|connection| connection.id != id);
-        if editor.ai.active.as_deref() == Some(id.as_str()) {
-            editor.ai.active = editor.ai.connections.first().map(|c| c.id.clone());
+    prepare(editor);
+    let model = editor.ai.connection().map(|connection| connection.model.clone()).unwrap_or_default();
+    let ready = editor.ai.connection().is_some_and(|connection| connection.has_key(&editor.ai.app()));
+    let labels = chat_labels(&model, ready);
+    egui::Panel::right("ai-chat").resizable(true).default_size(360.0).max_size(560.0).show(ui, |ui| {
+        // The suite's panel keeps one button for the last answer; the map takes it as a branch by
+        // default, and this row offers the single-node form beside it.
+        if editor.ai.panel.last_answer().is_some()
+            && ui.small_button(crate::tl!("Add the last answer as a node")).clicked()
+            && let Some(answer) = editor.ai.panel.last_answer().map(str::to_owned)
+        {
+            editor.ai_insert_chat(&answer, false);
         }
-        editor.ai.save();
-        editor.ai.refresh_keys();
-    }
-    if editor.ai.draft.is_none() && ui.button(crate::tl!("Add connection")).clicked() {
-        let provider = local_ai::PROVIDERS.iter().find(|p| p.id == "gemini").or_else(|| local_ai::PROVIDERS.first());
-        let (id, label, base_url) = provider.map(|p| (p.id, p.label, p.base_url)).unwrap_or(("custom", "Custom", ""));
-        editor.ai.draft = Some(Draft {
-            id: localmind_model::new_id(),
-            provider: id.to_string(),
-            label: label.to_string(),
-            base_url: base_url.to_string(),
-            model: String::new(),
-            key: String::new(),
-            key_saved: false,
-        });
-        editor.ai.models.clear();
-    }
-    if let Some(mut draft) = editor.ai.draft.take() {
-        ui.separator();
-        match draft_form(ui, editor, &mut draft) {
-            DraftEvent::Open => editor.ai.draft = Some(draft),
-            DraftEvent::Cancel => editor.ai.draft = None,
-            // Already saved by the form (which cleared the draft and wrote the connection).
-            DraftEvent::Saved => {}
-        }
-    }
-}
-
-enum DraftEvent {
-    Open,
-    Cancel,
-    Saved,
-}
-
-fn draft_form(ui: &mut egui::Ui, editor: &mut Editor, draft: &mut Draft) -> DraftEvent {
-    let mut event = DraftEvent::Open;
-    ui.horizontal(|ui| {
-        ui.label(crate::tl!("Provider"));
-        egui::ComboBox::from_id_salt("ai-provider").selected_text(draft.label.clone()).show_ui(ui, |ui| {
-            for provider in local_ai::PROVIDERS {
-                if ui.selectable_label(draft.provider == provider.id, provider.label).clicked() {
-                    draft.provider = provider.id.to_string();
-                    draft.label = provider.label.to_string();
-                    if !provider.base_url.is_empty() {
-                        draft.base_url = provider.base_url.to_string();
-                    }
+        match editor.ai.panel.show(ui, &labels) {
+            ai_ui::ChatAction::None => {}
+            ai_ui::ChatAction::Send => editor.ai_send_chat(&ctx),
+            ai_ui::ChatAction::Retry => {
+                if editor.ai.panel.retry() {
+                    editor.ai_send_chat(&ctx);
                 }
             }
-        });
-    });
-    ui.horizontal(|ui| {
-        ui.label(crate::tl!("Base URL"));
-        ui.add(egui::TextEdit::singleline(&mut draft.base_url).desired_width(360.0));
-    });
-    ui.horizontal(|ui| {
-        ui.label(crate::tl!("Model"));
-        ui.add(egui::TextEdit::singleline(&mut draft.model).desired_width(220.0));
-        if editor.ai.fetching.is_some() {
-            ui.spinner();
-        } else if ui.button(crate::tl!("Fetch models")).clicked() {
-            let snapshot = Draft {
-                id: draft.id.clone(),
-                provider: draft.provider.clone(),
-                label: draft.label.clone(),
-                base_url: draft.base_url.clone(),
-                model: draft.model.clone(),
-                key: String::new(),
-                key_saved: draft.key_saved,
-            };
-            editor.ai_fetch_models(ui.ctx(), &snapshot);
-        }
-        if !editor.ai.models.is_empty() {
-            let selected = if draft.model.is_empty() { "…" } else { draft.model.as_str() };
-            egui::ComboBox::from_id_salt("ai-model").selected_text(selected).show_ui(ui, |ui| {
-                for model in editor.ai.models.clone() {
-                    if ui.selectable_label(draft.model == model, &model).clicked() {
-                        draft.model = model;
-                    }
+            ai_ui::ChatAction::Stop => editor.ai_cancel(),
+            ai_ui::ChatAction::Clear => editor.ai.panel.clear(),
+            ai_ui::ChatAction::Insert => {
+                if let Some(answer) = editor.ai.panel.last_answer().map(str::to_owned) {
+                    editor.ai_insert_chat(&answer, true);
                 }
-            });
+            }
+            ai_ui::ChatAction::Settings => editor.ai.settings_open = true,
+            ai_ui::ChatAction::Close => editor.ai.chat_open = false,
         }
     });
-    ui.horizontal(|ui| {
-        ui.label(crate::tl!("API key"));
-        ui.add(egui::TextEdit::singleline(&mut draft.key).password(true).desired_width(280.0));
-        if draft.key_saved {
-            ui.label(egui::RichText::new(crate::tl!("key saved")).weak());
-        }
-        if ui.add_enabled(!draft.key.is_empty(), egui::Button::new(crate::tl!("Save key"))).clicked() {
-            editor.ai_save_key(draft);
-        }
-    });
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        let can_save = !draft.model.trim().is_empty() && !draft.base_url.trim().is_empty();
-        if ui.add_enabled(can_save, egui::Button::new(crate::tl!("Save"))).clicked() {
-            let done = Draft {
-                id: draft.id.clone(),
-                provider: draft.provider.clone(),
-                label: draft.label.clone(),
-                base_url: draft.base_url.clone(),
-                model: draft.model.clone(),
-                key: String::new(),
-                key_saved: draft.key_saved,
-            };
-            editor.ai_save_connection(done);
-            event = DraftEvent::Saved;
-        }
-        if ui.button(crate::tl!("Cancel")).clicked() {
-            event = DraftEvent::Cancel;
-        }
-    });
-    event
+}
+
+/// The chat labels, in the app's language.
+fn chat_labels<'a>(model: &'a str, ready: bool) -> ai_ui::ChatLabels<'a> {
+    ai_ui::ChatLabels {
+        title: crate::tl!("Chat"),
+        not_configured: if ready { "" } else { crate::tl!("No AI connection yet") },
+        configure: crate::tl!("Settings"),
+        settings: crate::tl!("Settings"),
+        clear: crate::tl!("Clear conversation"),
+        close: crate::tl!("Close"),
+        send: crate::tl!("Send"),
+        stop: crate::tl!("Stop"),
+        insert: crate::tl!("As a branch"),
+        retry: crate::tl!("Retry"),
+        dismiss: crate::tl!("Dismiss"),
+        empty: crate::tl!("Ask about the map, or about anything the model can help with."),
+        input_hint: crate::tl!("Message the AI…"),
+        chip: &chip,
+        model,
+        suggestions: &[],
+        to_end: crate::tl!("To the end"),
+    }
+}
+
+/// The context chip: what actually goes to the model.
+fn chip(info: &ai_ui::ContextInfo) -> String {
+    crate::i18n::tr_fmt(
+        crate::tl!("reading: {label} · {sent} of {total} chars · {turns} of {kept} turns"),
+        &[
+            ("label", &info.label),
+            ("sent", &info.sent.to_string()),
+            ("total", &info.total.to_string()),
+            ("turns", &info.turns.to_string()),
+            ("kept", &info.kept.to_string()),
+        ],
+    )
+}
+
+fn form_labels<'a>() -> ai_ui::ConnectionsLabels<'a> {
+    ai_ui::ConnectionsLabels {
+        title: crate::tl!("AI connections"),
+        provider: crate::tl!("Provider"),
+        base_url: crate::tl!("Base URL"),
+        model: crate::tl!("Model"),
+        api_key: crate::tl!("API key"),
+        list_models: crate::tl!("Fetch models"),
+        save: crate::tl!("Save"),
+        cancel: crate::tl!("Cancel"),
+        hint_url: crate::tl!("Empty uses the provider's own address."),
+        hint_key: crate::tl!("The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something."),
+    }
+}
+
+fn presets() -> Vec<ai_ui::Preset> {
+    local_ai::PROVIDERS.iter().map(|p| ai_ui::Preset { id: p.id.to_owned(), label: p.label.to_owned(), base_url: p.base_url.to_owned() }).collect()
+}
+
+fn draft_of(connection: &Connection) -> ai_ui::ConnectionDraft {
+    ai_ui::ConnectionDraft { provider: connection.provider.clone(), base_url: connection.base_url.clone(), model: connection.model.clone() }
+}
+
+fn connection_of(draft: &ai_ui::ConnectionDraft) -> Connection {
+    let label = local_ai::provider(&draft.provider).map(|p| p.label.to_owned()).unwrap_or_else(|| draft.provider.clone());
+    Connection {
+        id: AI_APP_ID.to_lowercase(),
+        provider: draft.provider.clone(),
+        label,
+        base_url: draft.base_url.trim().to_string(),
+        model: draft.model.trim().to_string(),
+    }
 }
 
 fn generate_dialog(ui: &mut egui::Ui, editor: &mut Editor) {
@@ -861,71 +772,4 @@ fn rewrite_dialog(ui: &mut egui::Ui, editor: &mut Editor) {
     } else if editor.ai.rewrite.is_some() {
         editor.ai.rewrite = Some((node, instruction));
     }
-}
-
-/// The chat, as a side panel of the map area.
-pub fn chat_panel(ui: &mut egui::Ui, editor: &mut Editor) {
-    if !editor.ai.chat.open {
-        return;
-    }
-    let ctx = ui.ctx().clone();
-    egui::Panel::right("ai-chat").show(ui, |ui| {
-        ui.set_min_width(320.0);
-        ui.horizontal(|ui| {
-            ui.strong(crate::tl!("Chat"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button(crate::tl!("Close")).clicked() {
-                    editor.ai.chat.open = false;
-                }
-                if ui.button(crate::tl!("Clear conversation")).clicked() {
-                    editor.ai.chat.messages.clear();
-                    editor.ai.chat.streaming.clear();
-                }
-            });
-        });
-        ui.separator();
-        egui::ScrollArea::vertical().stick_to_bottom(true).max_height((ui.available_height() - 120.0).max(120.0)).show(ui, |ui| {
-            for turn in editor.ai.chat.messages.clone() {
-                let label = match turn.role {
-                    Role::User => crate::tl!("You"),
-                    Role::Assistant => crate::tl!("AI"),
-                };
-                ui.label(egui::RichText::new(label).weak());
-                ui.label(&turn.text);
-                if turn.role == Role::Assistant {
-                    ui.horizontal(|ui| {
-                        if ui.small_button(crate::tl!("As a node")).clicked() {
-                            editor.ai_insert_chat(&turn.text, false);
-                        }
-                        if ui.small_button(crate::tl!("As a branch")).clicked() {
-                            editor.ai_insert_chat(&turn.text, true);
-                        }
-                    });
-                }
-                ui.add_space(6.0);
-            }
-            if !editor.ai.chat.streaming.is_empty() {
-                ui.label(egui::RichText::new(editor.ai.chat.streaming.clone()).italics());
-            }
-        });
-        ui.separator();
-        let busy = editor.ai.chat.busy;
-        ui.add_enabled_ui(!busy, |ui| {
-            ui.add(
-                egui::TextEdit::multiline(&mut editor.ai.chat.input)
-                    .desired_rows(2)
-                    .desired_width(f32::INFINITY)
-                    .hint_text(crate::tl!("Message the AI…")),
-            );
-        });
-        ui.horizontal(|ui| {
-            if busy {
-                if ui.button(crate::tl!("Stop")).clicked() {
-                    editor.ai_cancel();
-                }
-            } else if ui.add_enabled(!editor.ai.chat.input.trim().is_empty(), egui::Button::new(crate::tl!("Send"))).clicked() {
-                editor.ai_send_chat(&ctx);
-            }
-        });
-    });
 }

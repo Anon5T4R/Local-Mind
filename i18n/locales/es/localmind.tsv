@@ -145,3 +145,12 @@
 	Don't save	No guardar
 	Expand with AI	Expandir con IA
 	Color branches	Colorear las ramas
+	Add the last answer as a node	Añadir la última respuesta como nodo
+	Ask about the map, or about anything the model can help with.	Pregunta sobre el mapa, o sobre cualquier cosa en la que el modelo pueda ayudar.
+	Empty uses the provider's own address.	Vacío usa la dirección del propio proveedor.
+	No AI connection yet	Aún no hay conexión de IA
+	reading: {label} · {sent} of {total} chars · {turns} of {kept} turns	leyendo: {label} · {sent} de {total} caracteres · {turns} de {kept} turnos
+	Retry	Reintentar
+	Settings	Ajustes
+	the map · nodes: {nodes}	el mapa · nodos: {nodes}
+	To the end	Hasta el final

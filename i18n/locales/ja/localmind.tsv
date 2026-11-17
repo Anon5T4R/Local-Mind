@@ -145,3 +145,12 @@
 	Don't save	保存しない
 	Expand with AI	AI で展開
 	Color branches	枝を色分け
+	Add the last answer as a node	最後の回答をノードとして追加
+	Ask about the map, or about anything the model can help with.	マップについてでも、モデルが助けられることなら何でも聞いてください。
+	Empty uses the provider's own address.	空欄ならプロバイダー自身のアドレスを使います。
+	No AI connection yet	AI 接続がまだありません
+	reading: {label} · {sent} of {total} chars · {turns} of {kept} turns	読み込み中: {label} · {total} 文字中 {sent} 文字 · {kept} ターン中 {turns} ターン
+	Retry	再試行
+	Settings	設定
+	the map · nodes: {nodes}	マップ · ノード: {nodes}
+	To the end	最後へ

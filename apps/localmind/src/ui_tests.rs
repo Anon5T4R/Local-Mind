@@ -43,10 +43,17 @@ fn harness_with(editor: Editor) -> Harness<'static, Editor> {
 /// A backend that answers from a canned string, with no network at all.
 struct MockAi {
     answer: Result<String, String>,
+    /// The last request's messages, when the test wants to see what the model was told.
+    seen: Option<std::sync::Arc<std::sync::Mutex<Vec<local_ai::Msg>>>>,
 }
 
 impl localmind_ai::Backend for MockAi {
-    fn stream(&self, _connection: &local_ai::Connection, _history: &[local_ai::Msg], on_delta: &mut dyn FnMut(&str)) -> Result<String, String> {
+    fn stream(&self, _connection: &local_ai::Connection, history: &[local_ai::Msg], on_delta: &mut dyn FnMut(&str)) -> Result<String, String> {
+        if let Some(seen) = &self.seen
+            && let Ok(mut seen) = seen.lock()
+        {
+            *seen = history.to_vec();
+        }
         match &self.answer {
             Ok(answer) => {
                 // Two deltas, so the streaming path (accumulating partial text) is exercised.
@@ -67,16 +74,24 @@ impl localmind_ai::Backend for MockAi {
 /// An editor with a mock model and one saved connection, so the AI actions run without a network.
 fn ai_editor(answer: Result<&str, &str>) -> Editor {
     let mut editor = editor();
-    editor.ai.backend = std::sync::Arc::new(MockAi { answer: answer.map(str::to_string).map_err(str::to_string) });
-    editor.ai.connections = vec![local_ai::Connection {
+    editor.ai.backend = std::sync::Arc::new(MockAi { answer: answer.map(str::to_string).map_err(str::to_string), seen: None });
+    // Hermetic: the connection is handed in, so the store and the keychain are never read.
+    editor.ai.use_connection(Some(local_ai::Connection {
         id: "test".into(),
         provider: "custom".into(),
         label: "Test".into(),
         base_url: "http://example.invalid/v1".into(),
         model: "mock-model".into(),
-    }];
-    editor.ai.active = Some("test".into());
+    }));
     editor
+}
+
+/// [`ai_editor`] whose backend also records the messages the model was sent.
+fn ai_editor_seen(answer: &str) -> (Editor, std::sync::Arc<std::sync::Mutex<Vec<local_ai::Msg>>>) {
+    let mut editor = ai_editor(Ok(answer));
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    editor.ai.backend = std::sync::Arc::new(MockAi { answer: Ok(answer.to_string()), seen: Some(seen.clone()) });
+    (editor, seen)
 }
 
 /// Runs frames (with a little wall time) until `done` holds: the AI answers on a worker thread.
@@ -653,7 +668,7 @@ fn expand_from_the_ai_menu_adds_children() {
     assert_eq!(harness.state().selected.as_deref(), Some(children.first().map(|_| map.children("l4ct4t03")[0].id.as_str()).unwrap_or("")));
 }
 
-/// The chat streams into a bubble, and the answer can be inserted as a node.
+/// The chat streams into a bubble, and the answer can be inserted into the map.
 #[test]
 fn the_chat_answers_and_inserts_a_node() {
     let mut harness = harness_with(ai_editor(Ok("Uma ideia: revisar o protocolo.")));
@@ -665,25 +680,104 @@ fn the_chat_answers_and_inserts_a_node() {
     harness.run_steps(2);
     harness.get_by_label("Chat").click();
     harness.run_steps(2);
-    assert!(harness.state().ai.chat.open);
+    assert!(harness.state().ai.chat_open);
 
-    harness.state_mut().ai.chat.input = "me dê uma ideia".into();
-    harness.run_steps(2);
-    harness.get_by_label("Send").click();
-    wait_for(&mut harness, |editor| editor.ai.chat.messages.len() == 2);
+    let ctx = harness.ctx.clone();
+    harness.state_mut().ai_ask(&ctx, "me dê uma ideia");
+    wait_for(&mut harness, |editor| !editor.ai.busy());
     // The answer lands inside a frame; the bubble (and its buttons) is drawn on the next one.
     harness.run_steps(2);
 
-    let chat = &harness.state().ai.chat;
-    assert_eq!(chat.messages.len(), 2, "the question and the answer");
-    assert_eq!(chat.messages[1].role, crate::ai::Role::Assistant);
-    assert_eq!(chat.messages[1].text, "Uma ideia: revisar o protocolo.");
-
-    harness.get_by_label("As a node").click();
+    harness.get_by_label("Add the last answer as a node").click();
     harness.run_steps(2);
     let children = harness.state().doc.map.children("h3m0d1n4").len();
     assert_eq!(children, 3, "the fixture's two children plus the inserted node");
     shot(&mut harness, "ai-chat");
+}
+
+/// The chat is not blind anymore: the request carries the map's outline, with the chip's label.
+#[test]
+fn the_chat_sends_the_map_as_context() {
+    let (editor, seen) = ai_editor_seen("Ok.");
+    let mut harness = harness_with(editor);
+    harness.run_steps(3);
+    let ctx = harness.ctx.clone();
+    harness.state_mut().ai_ask(&ctx, "do que fala o mapa?");
+    wait_for(&mut harness, |editor| !editor.ai.busy());
+
+    let seen = seen.lock().expect("the recorded request");
+    let joined: String = seen
+        .iter()
+        .map(|message| match message {
+            local_ai::Msg::System(text) | local_ai::Msg::User(text) | local_ai::Msg::Assistant(text) => text.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(joined.contains("the map · nodes:"), "the chip's label travels: {joined}");
+    assert!(joined.contains("- Sepse"), "the map's outline travels: {joined}");
+    assert!(joined.contains("do que fala o mapa?"), "the question travels: {joined}");
+}
+
+/// A chat with no connection configured says why, inside the panel, with Retry beside it.
+#[test]
+fn the_chat_without_a_connection_says_why() {
+    let mut editor = editor();
+    // Hermetic: no store, no keychain.
+    editor.ai.use_connection(None);
+    let mut harness = harness_with(editor);
+    harness.run_steps(2);
+    let ctx = harness.ctx.clone();
+    harness.state_mut().ai_ask(&ctx, "alguém aí?");
+    harness.run_steps(3);
+    // The reason and the way back are drawn by the panel itself.
+    harness.get_by_label("Retry");
+}
+
+/// The connections form is the suite's: the fields a provider needs, and nothing written to the
+/// keychain (the test never presses Save).
+#[test]
+fn the_connections_form_opens_with_the_suite_fields() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Connections…").click();
+    harness.run_steps(2);
+    assert!(harness.state().ai.settings_open);
+    for label in ["Provider", "Base URL", "Model", "API key", "Save", "Cancel"] {
+        harness.get_by_label(label);
+    }
+    shot(&mut harness, "ai-connections");
+}
+
+/// Visual QA (ignored): the chat panel in the dark default, the craft light theme and a coloured
+/// one, with an answer in the bubble. Run with
+/// `cargo test -p localmind --bin localmind ui_tests::ai_chat_renders_for_visual_qa -- --ignored --nocapture`.
+#[test]
+#[ignore = "visual QA: renders the chat panel in three themes"]
+fn ai_chat_renders_for_visual_qa() {
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-ai");
+    if std::fs::create_dir_all(&directory).is_err() {
+        return;
+    }
+    for (name, theme) in [("dark", crate::theme::Theme::Default), ("light", crate::theme::Theme::Light), ("nature", crate::theme::Theme::Nature)] {
+        let (editor, _seen) = ai_editor_seen("O mapa trata do protocolo de sepse: reconhecimento, conduta e o ajuste pela cultura.");
+        let mut harness = harness_with(editor);
+        harness.run_steps(3);
+        click_card(&mut harness, "h3m0d1n4");
+        harness.get_by_label("AI").click();
+        harness.run_steps(2);
+        harness.get_by_label("Chat").click();
+        harness.run_steps(2);
+        harness.state_mut().theme = theme;
+        let ctx = harness.ctx.clone();
+        harness.state_mut().ai_ask(&ctx, "resuma o mapa");
+        wait_for(&mut harness, |editor| !editor.ai.busy());
+        harness.run_steps(4);
+        if let Ok(image) = harness.render() {
+            let _ = image.save(directory.join(format!("ai-chat-{name}.png")));
+        }
+    }
 }
 
 /// A model that fails (no key, provider down) surfaces the reason instead of an empty map.
@@ -734,30 +828,4 @@ fn no_connection_says_how_to_add_one() {
     harness.run_steps(2);
     let error = harness.state().ai.error.clone().unwrap_or_default();
     assert!(error.contains("Connections"), "{error}");
-}
-
-/// The connections panel: "Add connection" opens a draft with a provider preset, its base URL, and
-/// the key field. Nothing is written to the keychain here (the test never presses "Save key").
-///
-/// The draft's Cancel/Save buttons are not clicked: kittest's synthetic click does not reach a
-/// `Window`'s lower rows after it grows in the same frame (the suite lesson in
-/// `docs/planos/licoes-de-porta.md`), so their behaviour is covered by hand QA of the render.
-#[test]
-fn the_connections_panel_opens_a_draft_from_a_preset() {
-    let mut harness = harness();
-    harness.run_steps(3);
-    harness.get_by_label("AI").click();
-    harness.run_steps(2);
-    harness.get_by_label("Connections…").click();
-    harness.run_steps(2);
-    assert!(harness.state().ai.panel);
-
-    harness.get_by_label("Add connection").click();
-    harness.run_steps(3);
-    let draft = harness.state().ai.draft.as_ref().expect("a draft is open");
-    assert!(!draft.id.is_empty());
-    assert!(!draft.base_url.is_empty(), "a preset fills the base URL");
-    assert!(draft.label.contains("Gemini"), "the preset names the provider: {}", draft.label);
-    assert!(harness.query_by_label("API key").is_some(), "the key field is offered");
-    shot(&mut harness, "ai-connections");
 }
