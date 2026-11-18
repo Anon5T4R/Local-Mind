@@ -52,6 +52,8 @@ pub struct Editor {
     pub doc: Document,
     pub view: CanvasView,
     pub theme: Theme,
+    /// The theme follows the OS light/dark setting (the "System" choice); `theme` is what it resolved to.
+    pub follow_system: bool,
     pub ai: crate::ai::Ai,
     pub selected: Option<String>,
     pub editing: Option<Editing>,
@@ -106,6 +108,7 @@ impl Editor {
             doc,
             view: CanvasView::default(),
             theme: Theme::default(),
+            follow_system: false,
             ai: crate::ai::Ai::default(),
             selected,
             editing: None,
@@ -1097,8 +1100,8 @@ impl Editor {
 }
 
 /// The Edit and View menus, shared by the window and the headless tests (they only touch the
-/// editor). Returns the theme the user picked, so the caller can apply and save it.
-pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<Theme> {
+/// editor). Returns the theme choice the user made, so the caller can apply and save it.
+pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<crate::theme::Choice> {
     let mut chosen = None;
     ui.menu_button(tl!("Edit"), |ui| {
         if ui.add_enabled(editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
@@ -1164,10 +1167,16 @@ pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<Theme> {
         }
         ui.separator();
         ui.menu_button(tl!("Theme"), |ui| {
+            if ui.selectable_label(editor.follow_system, tl!("System")).clicked() {
+                editor.follow_system = true;
+                chosen = Some(crate::theme::Choice::System);
+                ui.close();
+            }
             for theme in Theme::ALL {
-                if ui.selectable_label(editor.theme == theme, tl!(theme.label())).clicked() {
+                if ui.selectable_label(!editor.follow_system && editor.theme == theme, tl!(theme.label())).clicked() {
+                    editor.follow_system = false;
                     editor.set_theme(theme);
-                    chosen = Some(theme);
+                    chosen = Some(crate::theme::Choice::Named(theme));
                     ui.close();
                 }
             }

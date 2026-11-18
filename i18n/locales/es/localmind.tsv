@@ -69,6 +69,7 @@
 	the map could not be saved: {error}	no se pudo guardar el mapa: {error}
 	the map could not be exported: {error}	no se pudo exportar el mapa: {error}
 	Theme	Tema
+	System	Sistema
 	Dark (default)	Oscuro (predeterminado)
 	Nature	Naturaleza
 	Dark blue	Azul oscuro

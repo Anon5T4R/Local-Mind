@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n;
 use crate::suite_entry::APP;
-use crate::theme::Theme;
 
 /// The file name inside the app's folder.
 const FILE: &str = "prefs.json";
@@ -20,7 +19,7 @@ pub struct Prefs {
     /// The `language` setting: `auto` or a code from `i18n::LANGUAGES`.
     #[serde(default = "auto_language")]
     pub language: String,
-    /// The `theme` setting: one of the ids in [`Theme::ALL`].
+    /// The `theme` setting: `system` (follow the OS, the default) or one of the ids in [`Theme::ALL`].
     #[serde(default = "default_theme")]
     pub theme: String,
 }
@@ -30,7 +29,7 @@ fn auto_language() -> String {
 }
 
 fn default_theme() -> String {
-    Theme::default().id().to_string()
+    crate::theme::SYSTEM_ID.to_string()
 }
 
 impl Default for Prefs {
@@ -107,7 +106,7 @@ mod tests {
     fn a_missing_language_reads_as_auto() {
         let prefs: Prefs = serde_json::from_str("{}").expect("defaults");
         assert_eq!(prefs.language, i18n::AUTO);
-        assert_eq!(prefs.theme, Theme::default().id());
+        assert_eq!(prefs.theme, crate::theme::SYSTEM_ID);
     }
 
     #[test]
@@ -116,7 +115,7 @@ mod tests {
         let text = serde_json::to_string(&prefs).expect("serialize");
         let back: Prefs = serde_json::from_str(&text).expect("parse");
         assert_eq!(back.language, "pt-br");
-        assert_eq!(Theme::from_id(&back.theme), Theme::PunkPrincess);
+        assert_eq!(crate::theme::Theme::from_id(&back.theme), crate::theme::Theme::PunkPrincess);
     }
 
     #[test]

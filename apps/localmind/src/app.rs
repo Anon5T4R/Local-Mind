@@ -54,7 +54,12 @@ impl LocalApp {
         crate::fonts::install(&cc.egui_ctx);
         let prefs = Prefs::load();
         i18n::set_language(&prefs.language);
-        let theme = crate::theme::Theme::from_id(&prefs.theme);
+        let follow_system = prefs.theme == crate::theme::SYSTEM_ID;
+        let theme = if follow_system {
+            crate::theme::Theme::for_system(cc.egui_ctx.system_theme() != Some(egui::Theme::Light))
+        } else {
+            crate::theme::Theme::from_id(&prefs.theme)
+        };
         theme.apply(&cc.egui_ctx);
 
         let mut app = Self {
@@ -70,11 +75,17 @@ impl LocalApp {
             window_title: String::new(),
         };
         app.editor.set_theme(theme);
+        app.editor.follow_system = follow_system;
         app.editor.ai.load();
         if let Some(path) = initial {
             app.open_path(path);
         }
         app
+    }
+
+    /// The theme "System" means right now: dark when the OS is dark (or says nothing), light otherwise.
+    fn system_theme(&self, ctx: &egui::Context) -> crate::theme::Theme {
+        crate::theme::Theme::for_system(ctx.system_theme() != Some(egui::Theme::Light))
     }
 
     /// The menu bar: the app's commands and Help.
@@ -115,9 +126,14 @@ impl LocalApp {
             });
             // Edit and View live in the editor (they only touch it), so the headless tests can use
             // the same menus the window does.
-            if let Some(theme) = edit::menus(ui, &mut self.editor) {
+            if let Some(choice) = edit::menus(ui, &mut self.editor) {
+                let (theme, id) = match choice {
+                    crate::theme::Choice::System => (self.system_theme(ui.ctx()), crate::theme::SYSTEM_ID),
+                    crate::theme::Choice::Named(theme) => (theme, theme.id()),
+                };
+                self.editor.set_theme(theme);
                 theme.apply(ui.ctx());
-                self.prefs.theme = theme.id().to_string();
+                self.prefs.theme = id.to_string();
                 self.prefs.save();
             }
             crate::ai::menu(ui, &mut self.editor);
@@ -481,6 +497,15 @@ impl eframe::App for LocalApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.updater.check_at_start(ctx);
         self.updater.tick(ctx);
+
+        // "System" follows the OS while the app runs.
+        if self.editor.follow_system {
+            let theme = self.system_theme(ctx);
+            if theme != self.editor.theme {
+                self.editor.set_theme(theme);
+                theme.apply(ctx);
+            }
+        }
 
         // The window wants to close: a dirty map cancels the close and shows the prompt.
         if ctx.input(|i| i.viewport().close_requested()) && self.close.request(self.editor.doc.dirty) {

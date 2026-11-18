@@ -23,6 +23,16 @@ pub enum Theme {
     PunkPrincess,
 }
 
+/// The id the preferences file keeps for "System" (follow the OS light/dark setting).
+pub const SYSTEM_ID: &str = "system";
+
+/// What the Theme menu picks: the OS setting, or one of the named palettes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Choice {
+    System,
+    Named(Theme),
+}
+
 /// The colours one theme gives to the window, the canvas and the minimap.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Colors {
@@ -70,6 +80,11 @@ impl Theme {
     /// preferences file written by a newer build must not keep the app from opening).
     pub fn from_id(id: &str) -> Theme {
         Theme::ALL.into_iter().find(|theme| theme.id() == id).unwrap_or_default()
+    }
+
+    /// The theme "System" resolves to: the dark default when the OS is dark, the light theme otherwise.
+    pub fn for_system(dark: bool) -> Theme {
+        if dark { Theme::Default } else { Theme::Light }
     }
 
     /// The English source string the catalogs translate.

@@ -69,6 +69,7 @@
 	the map could not be saved: {error}	マップを保存できませんでした: {error}
 	the map could not be exported: {error}	マップを書き出せませんでした: {error}
 	Theme	テーマ
+	System	システム
 	Dark (default)	ダーク (既定)
 	Nature	ネイチャー
 	Dark blue	ダークブルー
