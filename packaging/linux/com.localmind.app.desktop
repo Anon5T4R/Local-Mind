@@ -4,6 +4,7 @@ Name=Local Mind
 GenericName=Mind Map
 Comment=Mind maps with a balanced layout
 Exec=localmind %F
+MimeType=application/x-localmind;
 Icon=com.localmind.app
 Terminal=false
 Categories=Office;Graphics;

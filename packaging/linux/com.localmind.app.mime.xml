@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- shared-mime-info for Local Mind's own map format (.tmind). Installed to
+     /usr/share/mime/packages/ (update-mime-database runs on install). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-localmind">
+    <comment>Local Mind map</comment>
+    <icon name="com.localmind.app"/>
+    <glob pattern="*.tmind"/>
+  </mime-type>
+</mime-info>

@@ -192,6 +192,19 @@
             <Verb Id="open" Command="Open" TargetFile="LocalMindExe" Argument="&quot;%1&quot;" />
           </Extension>
         </ProgId>
+
+        <!-- "Open with" and Settings > Default apps, through the Default Programs registration: OpenWithProgids,
+             Capabilities and RegisteredApplications. The ProgId above already makes the app the handler
+             of its own .tmind; this lists it the same way as the suite's other apps. -->
+        <RegistryValue Root="HKLM" Key="Software\Classes\.tmind\OpenWithProgids" Name="LocalMind.Document" Value="" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe" Name="FriendlyAppName" Value="Local Mind" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe\shell\open\command" Value="&quot;[#LocalMindExe]&quot; &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe\SupportedTypes" Name=".tmind" Value="" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationName" Value="Local Mind" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationDescription" Value="Mind maps with a balanced layout" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationIcon" Value="[#LocalMindExe],0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities\FileAssociations" Name=".tmind" Value="LocalMind.Document" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="LocalMind" Value="Software\LocalMind\Capabilities" Type="string" />
       </Component>
 
       <!-- Desktop shortcut, the suite's standard: a plain shortcut (not advertised, so it works

@@ -44,6 +44,7 @@
   </supports>
   <provides>
     <binary>localmind</binary>
+    <mediatype>application/x-localmind</mediatype>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
