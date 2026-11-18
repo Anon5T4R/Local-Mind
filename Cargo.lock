@@ -2496,7 +2496,7 @@ dependencies = [
 
 [[package]]
 name = "localmind"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "craft-ai-ui",
  "craft-i18n",
@@ -2521,7 +2521,7 @@ dependencies = [
 
 [[package]]
 name = "localmind-ai"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "local-ai",
  "localmind-model",
@@ -2531,7 +2531,7 @@ dependencies = [
 
 [[package]]
 name = "localmind-io"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "localmind-layout",
  "localmind-model",
@@ -2540,14 +2540,14 @@ dependencies = [
 
 [[package]]
 name = "localmind-layout"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "localmind-model",
 ]
 
 [[package]]
 name = "localmind-model"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -5763,7 +5763,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "serde_json",
 ]
