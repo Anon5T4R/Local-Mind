@@ -18,6 +18,7 @@ craft-update = { workspace = true }
 # The chat panel and the connections form of the suite's AI surface.
 craft-ai-ui = { workspace = true }
 craft-window = { workspace = true }
+craft-desktop-theme = { workspace = true }
 # `clipboard` is a separate eframe feature in 0.37: without it egui-winit simulates an in-process
 # clipboard and cut/copy/paste, RequestPaste and the Wayland PRIMARY path are unavailable.
 eframe = { workspace = true, features = ["default_fonts", "clipboard", "wgpu", "glow", "accesskit", "wayland", "x11"] }

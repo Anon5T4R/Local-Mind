@@ -52,6 +52,8 @@ pub struct LocalApp {
 impl LocalApp {
     pub fn new(cc: &eframe::CreationContext<'_>, frame: craft_window::Frame, initial: Option<PathBuf>) -> Self {
         crate::fonts::install(&cc.egui_ctx);
+        // Linux: the desktop's light/dark choice, which winit does not report.
+        craft_desktop_theme::follow(&cc.egui_ctx);
         let prefs = Prefs::load();
         i18n::set_language(&prefs.language);
         let follow_system = prefs.theme == crate::theme::SYSTEM_ID;
