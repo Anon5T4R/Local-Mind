@@ -105,9 +105,12 @@ impl LocalApp {
     /// The suite's controls at the right of the top bar: the theme (Automatic/Light/Dark) and the gear that opens
     /// Settings. Called inside a right-to-left layout, so the gear is drawn first and ends up rightmost.
     fn shell_buttons(&mut self, ui: &mut egui::Ui) {
+        // Off the window's edge, and a finger's width between the two.
+        ui.add_space(8.0);
         if craft_icons::ui::button(ui, Icon::Settings, tl!("Settings")).clicked() {
             self.settings_open = true;
         }
+        ui.add_space(6.0);
         let mut mode = self.editor.mode;
         let tooltip = i18n::tr_fmt("Theme: {mode}", &[("mode", tl!(mode.label()))]);
         if craft_icons::ui::theme_button(ui, &mut mode, &tooltip) {
@@ -218,9 +221,10 @@ impl LocalApp {
 
         let label = self.editor.doc.file_label(tl!("An untitled map"));
         let dirty = if self.editor.doc.dirty { " *" } else { "" };
-        ui.label(format!("{label}{dirty}"))
-            .on_hover_text(self.editor.doc.path.as_ref().map_or_else(|| tl!("An untitled map").to_string(), |p| p.display().to_string()));
+        let path = self.editor.doc.path.as_ref().map_or_else(|| tl!("An untitled map").to_string(), |p| p.display().to_string());
 
+        // The zoom controls first (right to left), then the map name in what is left: on a narrow window the name
+        // shortens with "…" instead of running under the buttons.
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button(tl!("Fit to window")).clicked() {
                 self.editor.fit();
@@ -232,6 +236,10 @@ impl LocalApp {
             if ui.button("-").on_hover_text(tl!("Zoom out")).clicked() {
                 self.editor.zoom_step(1.0 / 1.2);
             }
+            ui.add_space(8.0);
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add(egui::Label::new(format!("{label}{dirty}")).truncate()).on_hover_text(path);
+            });
         });
     }
 
