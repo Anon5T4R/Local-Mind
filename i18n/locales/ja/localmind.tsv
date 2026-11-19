@@ -155,3 +155,10 @@
 	Paste the API key first: this provider asks for one.	先に API キーを貼り付けてください。このプロバイダーには必要です。
 	Choose a provider or type its address first.	先にプロバイダーを選ぶか、アドレスを入力してください。
 	Choose a model first (Fetch models lists them).	先にモデルを選んでください (モデルを取得で一覧表示)。
+	Export: {format}	エクスポート: {format}
+	Search commands	コマンドを検索
+	Search commands ({shortcut})	コマンドを検索 ({shortcut})
+	No command matches.	一致するコマンドはありません。
+	Nothing to undo.	元に戻す操作はありません。
+	Nothing to redo.	やり直す操作はありません。
+	Select a card first.	先にカードを選択してください。

@@ -155,3 +155,10 @@
 	Paste the API key first: this provider asks for one.	Cole a chave de API antes: este provedor pede uma.
 	Choose a provider or type its address first.	Escolha um provedor ou digite o endereço dele antes.
 	Choose a model first (Fetch models lists them).	Escolha um modelo antes (Buscar modelos lista os disponíveis).
+	Export: {format}	Exportar: {format}
+	Search commands	Buscar comandos
+	Search commands ({shortcut})	Buscar comandos ({shortcut})
+	No command matches.	Nenhum comando encontrado.
+	Nothing to undo.	Nada para desfazer.
+	Nothing to redo.	Nada para refazer.
+	Select a card first.	Selecione um cartão antes.

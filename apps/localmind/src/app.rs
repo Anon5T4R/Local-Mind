@@ -18,6 +18,8 @@ use crate::prefs::Prefs;
 use crate::suite_entry::APP;
 use crate::tl;
 
+mod commands;
+
 /// The extensions the open/save dialogs offer. `json` is what the original app also accepted, and
 /// its maps are plain JSON, so a `.json` a user renamed by hand still opens.
 const MAP_EXTENSIONS: &[&str] = &["tmind", "json"];
@@ -40,6 +42,8 @@ pub struct LocalApp {
     about_open: bool,
     /// The Settings window (language and theme), opened by the gear and Edit > Settings….
     settings_open: bool,
+    /// The command palette (Ctrl+K, or the search icon of the top bar).
+    palette: craft_palette::Palette,
     /// The settings the app remembers between runs (the interface language).
     prefs: Prefs,
     editor: Editor,
@@ -71,6 +75,7 @@ impl LocalApp {
             frame,
             about_open: false,
             settings_open: false,
+            palette: craft_palette::Palette::default(),
             prefs,
             editor: Editor::new(edit::new_document()),
             pending: None,
@@ -102,10 +107,10 @@ impl LocalApp {
         self.prefs.save();
     }
 
-    /// The suite's controls at the right of the top bar: the theme (Automatic/Light/Dark) and the gear that opens
-    /// Settings. Called inside a right-to-left layout, so the gear is drawn first and ends up rightmost.
+    /// The suite's controls at the right of the top bar: the command palette, the theme (Automatic/Light/Dark) and the
+    /// gear that opens Settings. Called inside a right-to-left layout, so the gear is drawn first and ends up rightmost.
     fn shell_buttons(&mut self, ui: &mut egui::Ui) {
-        // Off the window's edge, and a finger's width between the two.
+        // Off the window's edge, and a finger's width between them.
         ui.add_space(8.0);
         if craft_icons::ui::button(ui, Icon::Settings, tl!("Settings")).clicked() {
             self.settings_open = true;
@@ -115,6 +120,24 @@ impl LocalApp {
         let tooltip = i18n::tr_fmt("Theme: {mode}", &[("mode", tl!(mode.label()))]);
         if craft_icons::ui::theme_button(ui, &mut mode, &tooltip) {
             self.set_mode(ui.ctx(), mode);
+        }
+        ui.add_space(6.0);
+        let shortcut = ui.ctx().format_shortcut(&egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::K));
+        let search = i18n::tr_fmt("Search commands ({shortcut})", &[("shortcut", &shortcut)]);
+        if craft_icons::ui::button(ui, Icon::Search, &search).clicked() {
+            self.palette.open();
+        }
+    }
+
+    /// The command palette, when open: runs what the user picked.
+    fn palette(&mut self, ctx: &egui::Context) {
+        if !self.palette.is_open() {
+            return;
+        }
+        let commands = self.commands(ctx);
+        let labels = craft_palette::Labels { placeholder: tl!("Search commands"), empty: tl!("No command matches.") };
+        if let Some(id) = self.palette.show(ctx, &labels, &commands) {
+            self.run_command(ctx, &id);
         }
     }
 
@@ -186,33 +209,56 @@ impl LocalApp {
     }
 
     fn toolbar(&mut self, ui: &mut egui::Ui) {
-        if ui.button(tl!("New map")).clicked() {
+        // Every button says its shortcut on hover, and a disabled one says why it is off.
+        let key = |ui: &egui::Ui, modifiers: egui::Modifiers, key: egui::Key| ui.ctx().format_shortcut(&egui::KeyboardShortcut::new(modifiers, key));
+        let command = egui::Modifiers::COMMAND;
+        if ui.button(tl!("New map")).on_hover_text(key(ui, command, egui::Key::N)).clicked() {
             self.new_map();
         }
-        if ui.button(tl!("Open…")).clicked() {
+        if ui.button(tl!("Open…")).on_hover_text(key(ui, command, egui::Key::O)).clicked() {
             self.ask_open(ui.ctx());
         }
-        if ui.button(tl!("Save")).clicked() {
+        if ui.button(tl!("Save")).on_hover_text(key(ui, command, egui::Key::S)).clicked() {
             self.save(ui.ctx());
         }
-        if ui.button(tl!("Save As…")).clicked() {
+        if ui.button(tl!("Save As…")).on_hover_text(key(ui, command | egui::Modifiers::SHIFT, egui::Key::S)).clicked() {
             self.ask_save_as(ui.ctx());
         }
         ui.separator();
-        if ui.add_enabled(self.editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
+        let undo = key(ui, command, egui::Key::Z);
+        if ui
+            .add_enabled(self.editor.can_undo(), egui::Button::new(tl!("Undo")))
+            .on_hover_text(&undo)
+            .on_disabled_hover_text(tl!("Nothing to undo."))
+            .clicked()
+        {
             self.editor.undo();
         }
-        if ui.add_enabled(self.editor.can_redo(), egui::Button::new(tl!("Redo"))).clicked() {
+        let redo = key(ui, command | egui::Modifiers::SHIFT, egui::Key::Z);
+        if ui
+            .add_enabled(self.editor.can_redo(), egui::Button::new(tl!("Redo")))
+            .on_hover_text(&redo)
+            .on_disabled_hover_text(tl!("Nothing to redo."))
+            .clicked()
+        {
             self.editor.redo();
         }
         ui.separator();
         let selected = self.editor.selected.clone();
-        if ui.add_enabled(selected.is_some(), egui::Button::new(tl!("New child"))).clicked()
+        if ui
+            .add_enabled(selected.is_some(), egui::Button::new(tl!("New child")))
+            .on_hover_text("Tab")
+            .on_disabled_hover_text(tl!("Select a card first."))
+            .clicked()
             && let Some(id) = &selected
         {
             self.editor.add_child(id);
         }
-        if ui.add_enabled(selected.is_some(), egui::Button::new(tl!("Delete node"))).clicked()
+        if ui
+            .add_enabled(selected.is_some(), egui::Button::new(tl!("Delete node")))
+            .on_hover_text(key(ui, egui::Modifiers::NONE, egui::Key::Delete))
+            .on_disabled_hover_text(tl!("Select a card first."))
+            .clicked()
             && let Some(id) = &selected
         {
             self.editor.delete(id);
@@ -421,6 +467,9 @@ impl LocalApp {
                 command && i.key_pressed(egui::Key::S) && i.modifiers.shift,
             )
         });
+        if craft_palette::Palette::shortcut_pressed(ctx) {
+            self.palette.toggle();
+        }
         if new {
             self.new_map();
         }
@@ -623,6 +672,7 @@ impl eframe::App for LocalApp {
         if self.settings_open {
             self.settings(ui);
         }
+        self.palette(ui.ctx());
 
         // The update prompt and its progress, drawn last so it sits above the window's content.
         match self.updater.show(ui.ctx()) {
