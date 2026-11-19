@@ -660,6 +660,10 @@ fn form_labels<'a>() -> ai_ui::ConnectionsLabels<'a> {
         cancel: crate::tl!("Cancel"),
         hint_url: crate::tl!("Empty uses the provider's own address."),
         hint_key: crate::tl!("The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something."),
+        close: crate::tl!("Close"),
+        needs_key: crate::tl!("Paste the API key first: this provider asks for one."),
+        needs_url: crate::tl!("Choose a provider or type its address first."),
+        needs_model: crate::tl!("Choose a model first (Fetch models lists them)."),
     }
 }
 

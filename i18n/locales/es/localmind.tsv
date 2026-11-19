@@ -152,3 +152,6 @@
 	Settings	Configuración
 	the map · nodes: {nodes}	el mapa · nodos: {nodes}
 	To the end	Hasta el final
+	Paste the API key first: this provider asks for one.	Pegue primero la clave de API: este proveedor la pide.
+	Choose a provider or type its address first.	Elija un proveedor o escriba su dirección primero.
+	Choose a model first (Fetch models lists them).	Elija un modelo primero (Buscar modelos los lista).
