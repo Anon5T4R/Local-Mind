@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-publish = false
+publish.workspace = true
 description = "Local Mind - reading and writing the user's .tmind files, atomically"
 
 [lints]
