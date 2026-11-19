@@ -235,7 +235,7 @@ mod tests {
     }
 
     fn colors() -> Colors {
-        Theme::Default.colors()
+        Theme::Dark.colors()
     }
 
     #[test]
@@ -333,9 +333,9 @@ mod tests {
 
     #[test]
     fn html_carries_the_theme_colours_and_the_language() {
-        let html = html(&map(vec![node("R", None)]), &Theme::PastelPink.colors(), "es-ES");
+        let html = html(&map(vec![node("R", None)]), &Theme::Light.colors(), "es-ES");
         assert!(html.contains("lang=\"es-ES\""));
-        assert!(html.contains(&hex(Theme::PastelPink.colors().canvas)));
+        assert!(html.contains(&hex(Theme::Light.colors().canvas)));
     }
 
     /// Two roots: the export uses the first, the same one the layout draws.

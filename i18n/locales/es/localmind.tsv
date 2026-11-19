@@ -14,10 +14,10 @@
 @id	language.name	Español
 	File	Archivo
 	New map	Nuevo mapa
-	Open.	Abrir.
+	Open…	Abrir…
 	Save	Guardar
-	Save As.	Guardar como.
-	Quit Local Mind	Salir de Local Mind
+	Save As…	Guardar como…
+	Exit	Salir
 	Edit	Editar
 	Undo	Deshacer
 	Redo	Rehacer
@@ -31,7 +31,7 @@
 	Zoom in	Acercar
 	Zoom out	Alejar
 	Help	Ayuda
-	Check for Updates.	Buscar actualizaciones.
+	Check for Updates…	Buscar actualizaciones…
 	About Local Mind	Acerca de Local Mind
 	An untitled map	Mapa sin título
 	Central idea	Idea central
@@ -69,12 +69,9 @@
 	the map could not be saved: {error}	no se pudo guardar el mapa: {error}
 	the map could not be exported: {error}	no se pudo exportar el mapa: {error}
 	Theme	Tema
-	System	Sistema
-	Dark (default)	Oscuro (predeterminado)
-	Nature	Naturaleza
-	Dark blue	Azul oscuro
-	Calm green	Verde tranquilo
-	Pastel pink	Rosa pastel
+	Dark	Oscuro
+	Settings…	Configuración…
+	Theme: {mode}	Tema: {mode}
 	Export	Exportar
 	Markdown	Markdown
 	HTML	HTML
@@ -152,6 +149,6 @@
 	No AI connection yet	Aún no hay conexión de IA
 	reading: {label} · {sent} of {total} chars · {turns} of {kept} turns	leyendo: {label} · {sent} de {total} caracteres · {turns} de {kept} turnos
 	Retry	Reintentar
-	Settings	Ajustes
+	Settings	Configuración
 	the map · nodes: {nodes}	el mapa · nodos: {nodes}
 	To the end	Hasta el final

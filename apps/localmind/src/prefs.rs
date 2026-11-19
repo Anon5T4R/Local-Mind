@@ -19,7 +19,7 @@ pub struct Prefs {
     /// The `language` setting: `auto` or a code from `i18n::LANGUAGES`.
     #[serde(default = "auto_language")]
     pub language: String,
-    /// The `theme` setting: `system` (follow the OS, the default) or one of the ids in [`Theme::ALL`].
+    /// The `theme` setting: `system` (follow the OS, the default), `light` or `dark` (`craft_icons::ThemeMode`).
     #[serde(default = "default_theme")]
     pub theme: String,
 }
@@ -29,7 +29,7 @@ fn auto_language() -> String {
 }
 
 fn default_theme() -> String {
-    crate::theme::SYSTEM_ID.to_string()
+    craft_icons::ThemeMode::System.id().to_string()
 }
 
 impl Default for Prefs {
@@ -106,16 +106,16 @@ mod tests {
     fn a_missing_language_reads_as_auto() {
         let prefs: Prefs = serde_json::from_str("{}").expect("defaults");
         assert_eq!(prefs.language, i18n::AUTO);
-        assert_eq!(prefs.theme, crate::theme::SYSTEM_ID);
+        assert_eq!(prefs.theme, "system");
     }
 
     #[test]
     fn the_language_and_the_theme_survive_a_round_trip() {
-        let prefs = Prefs { language: "pt-br".into(), theme: "punkprincess".into() };
+        let prefs = Prefs { language: "pt-br".into(), theme: "dark".into() };
         let text = serde_json::to_string(&prefs).expect("serialize");
         let back: Prefs = serde_json::from_str(&text).expect("parse");
         assert_eq!(back.language, "pt-br");
-        assert_eq!(crate::theme::Theme::from_id(&back.theme), crate::theme::Theme::PunkPrincess);
+        assert_eq!(crate::theme::mode_from_pref(&back.theme), craft_icons::ThemeMode::Dark);
     }
 
     #[test]

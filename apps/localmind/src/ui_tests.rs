@@ -470,45 +470,52 @@ fn the_editor_starts_fitted_on_the_whole_map() {
     let _ = edit::COLORS;
 }
 
-/// The View menu changes the theme: a real click on View -> Theme -> Nature.
+/// The View menu changes the theme: a real click on View -> Theme -> Light, Dark and Automatic (the suite's three).
 #[test]
 fn the_view_menu_changes_the_theme() {
     let mut harness = harness();
     harness.run_steps(3);
-    assert_eq!(harness.state().theme, crate::theme::Theme::Default);
+    assert_eq!(harness.state().theme, crate::theme::Theme::Dark);
 
-    harness.get_by_label("View").click();
-    harness.run_steps(2);
-    harness.get_by_label("Theme").click();
-    harness.run_steps(2);
-    harness.get_by_label("Nature").click();
-    harness.run_steps(3);
+    let pick = |harness: &mut Harness<'static, Editor>, label: &str| {
+        harness.get_by_label("View").click();
+        harness.run_steps(2);
+        harness.get_by_label("Theme").click();
+        harness.run_steps(2);
+        harness.get_by_label(label).click();
+        harness.run_steps(3);
+    };
 
-    assert_eq!(harness.state().theme, crate::theme::Theme::Nature);
-    // The canvas paints with the theme it now reports.
-    assert_eq!(harness.state().colors().canvas, crate::theme::Theme::Nature.colors().canvas);
-    shot(&mut harness, "theme-nature");
-
-    // The craft light theme: the neutral counterpart of the default.
-    harness.get_by_label("View").click();
-    harness.run_steps(2);
-    harness.get_by_label("Theme").click();
-    harness.run_steps(2);
-    harness.get_by_label("Light").click();
-    harness.run_steps(3);
+    pick(&mut harness, "Light");
+    assert_eq!(harness.state().mode, craft_icons::ThemeMode::Light);
     assert_eq!(harness.state().theme, crate::theme::Theme::Light);
+    // The canvas paints with the theme it now reports.
+    assert_eq!(harness.state().colors().canvas, crate::theme::Theme::Light.colors().canvas);
     assert!(!harness.state().colors().dark);
     shot(&mut harness, "theme-light");
 
-    // And a dark theme after it, so the renders show both ends of the range.
-    harness.get_by_label("View").click();
-    harness.run_steps(2);
-    harness.get_by_label("Theme").click();
-    harness.run_steps(2);
-    harness.get_by_label("PunkPrincess").click();
+    pick(&mut harness, "Dark");
+    assert_eq!(harness.state().mode, craft_icons::ThemeMode::Dark);
+    assert_eq!(harness.state().theme, crate::theme::Theme::Dark);
+    shot(&mut harness, "theme-dark");
+
+    // Automatic follows the OS; the headless context reports none, which reads as dark.
+    pick(&mut harness, "Automatic");
+    assert_eq!(harness.state().mode, craft_icons::ThemeMode::System);
+    assert_eq!(harness.state().theme, crate::theme::Theme::Dark);
+}
+
+/// Edit > Settings… asks the app for its Settings window (the gear does the same in the window's top bar).
+#[test]
+fn the_edit_menu_asks_for_settings() {
+    let mut harness = harness();
     harness.run_steps(3);
-    assert_eq!(harness.state().theme, crate::theme::Theme::PunkPrincess);
-    shot(&mut harness, "theme-punkprincess");
+    assert!(!harness.state().settings_requested);
+    harness.get_by_label("Edit").click();
+    harness.run_steps(2);
+    harness.get_by_label("Settings…").click();
+    harness.run_steps(2);
+    assert!(harness.state().settings_requested);
 }
 
 /// The root's "+": a click adds a child on that side, selects it and opens its text field.
@@ -754,13 +761,13 @@ fn the_connections_form_opens_with_the_suite_fields() {
 /// one, with an answer in the bubble. Run with
 /// `cargo test -p localmind --bin localmind ui_tests::ai_chat_renders_for_visual_qa -- --ignored --nocapture`.
 #[test]
-#[ignore = "visual QA: renders the chat panel in three themes"]
+#[ignore = "visual QA: renders the chat panel in both palettes"]
 fn ai_chat_renders_for_visual_qa() {
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-ai");
     if std::fs::create_dir_all(&directory).is_err() {
         return;
     }
-    for (name, theme) in [("dark", crate::theme::Theme::Default), ("light", crate::theme::Theme::Light), ("nature", crate::theme::Theme::Nature)] {
+    for (name, theme) in [("dark", crate::theme::Theme::Dark), ("light", crate::theme::Theme::Light)] {
         let (editor, _seen) = ai_editor_seen("O mapa trata do protocolo de sepse: reconhecimento, conduta e o ajuste pela cultura.");
         let mut harness = harness_with(editor);
         harness.run_steps(3);

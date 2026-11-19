@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use craft_icons::{Icon, ThemeMode};
 use craft_update::updater::{Action, Status, Updater};
 
 use crate::close::{self, Outcome};
@@ -37,6 +38,8 @@ pub struct LocalApp {
     /// gets its header bar with the desktop's button layout.
     frame: craft_window::Frame,
     about_open: bool,
+    /// The Settings window (language and theme), opened by the gear and Edit > Settings….
+    settings_open: bool,
     /// The settings the app remembers between runs (the interface language).
     prefs: Prefs,
     editor: Editor,
@@ -56,12 +59,10 @@ impl LocalApp {
         craft_desktop_theme::follow(&cc.egui_ctx);
         let prefs = Prefs::load();
         i18n::set_language(&prefs.language);
-        let follow_system = prefs.theme == crate::theme::SYSTEM_ID;
-        let theme = if follow_system {
-            crate::theme::Theme::for_system(cc.egui_ctx.system_theme() != Some(egui::Theme::Light))
-        } else {
-            crate::theme::Theme::from_id(&prefs.theme)
-        };
+        // The SVG loader for the suite's icons (theme, settings).
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+        let mode = crate::theme::mode_from_pref(&prefs.theme);
+        let theme = crate::theme::Theme::resolve(mode, cc.egui_ctx.system_theme() != Some(egui::Theme::Light));
         theme.apply(&cc.egui_ctx);
 
         let mut app = Self {
@@ -69,6 +70,7 @@ impl LocalApp {
             pickers: Pickers::default(),
             frame,
             about_open: false,
+            settings_open: false,
             prefs,
             editor: Editor::new(edit::new_document()),
             pending: None,
@@ -77,7 +79,7 @@ impl LocalApp {
             window_title: String::new(),
         };
         app.editor.set_theme(theme);
-        app.editor.follow_system = follow_system;
+        app.editor.mode = mode;
         app.editor.ai.load();
         if let Some(path) = initial {
             app.open_path(path);
@@ -85,9 +87,32 @@ impl LocalApp {
         app
     }
 
-    /// The theme "System" means right now: dark when the OS is dark (or says nothing), light otherwise.
-    fn system_theme(&self, ctx: &egui::Context) -> crate::theme::Theme {
-        crate::theme::Theme::for_system(ctx.system_theme() != Some(egui::Theme::Light))
+    /// The palette the current mode shows right now (Automatic: dark when the OS is dark or says nothing).
+    fn resolved_theme(&self, ctx: &egui::Context) -> crate::theme::Theme {
+        crate::theme::Theme::resolve(self.editor.mode, ctx.system_theme() != Some(egui::Theme::Light))
+    }
+
+    /// Switches to `mode`: the editor, the egui style and the saved preference follow.
+    fn set_mode(&mut self, ctx: &egui::Context, mode: ThemeMode) {
+        self.editor.mode = mode;
+        let theme = self.resolved_theme(ctx);
+        self.editor.set_theme(theme);
+        theme.apply(ctx);
+        self.prefs.theme = mode.id().to_string();
+        self.prefs.save();
+    }
+
+    /// The suite's controls at the right of the top bar: the theme (Automatic/Light/Dark) and the gear that opens
+    /// Settings. Called inside a right-to-left layout, so the gear is drawn first and ends up rightmost.
+    fn shell_buttons(&mut self, ui: &mut egui::Ui) {
+        if craft_icons::ui::button(ui, Icon::Settings, tl!("Settings")).clicked() {
+            self.settings_open = true;
+        }
+        let mut mode = self.editor.mode;
+        let tooltip = i18n::tr_fmt("Theme: {mode}", &[("mode", tl!(mode.label()))]);
+        if craft_icons::ui::theme_button(ui, &mut mode, &tooltip) {
+            self.set_mode(ui.ctx(), mode);
+        }
     }
 
     /// The menu bar: the app's commands and Help.
@@ -99,7 +124,7 @@ impl LocalApp {
                     self.new_map();
                     ui.close();
                 }
-                if ui.button(tl!("Open.")).clicked() {
+                if ui.button(tl!("Open…")).clicked() {
                     self.ask_open(ui.ctx());
                     ui.close();
                 }
@@ -108,7 +133,7 @@ impl LocalApp {
                     self.save(ui.ctx());
                     ui.close();
                 }
-                if ui.button(tl!("Save As.")).clicked() {
+                if ui.button(tl!("Save As…")).clicked() {
                     self.ask_save_as(ui.ctx());
                     ui.close();
                 }
@@ -121,22 +146,18 @@ impl LocalApp {
                     }
                 });
                 ui.separator();
-                if ui.button(tl!("Quit Local Mind")).clicked() {
+                if ui.button(tl!("Exit")).clicked() {
                     quit = true;
                     ui.close();
                 }
             });
             // Edit and View live in the editor (they only touch it), so the headless tests can use
             // the same menus the window does.
-            if let Some(choice) = edit::menus(ui, &mut self.editor) {
-                let (theme, id) = match choice {
-                    crate::theme::Choice::System => (self.system_theme(ui.ctx()), crate::theme::SYSTEM_ID),
-                    crate::theme::Choice::Named(theme) => (theme, theme.id()),
-                };
-                self.editor.set_theme(theme);
-                theme.apply(ui.ctx());
-                self.prefs.theme = id.to_string();
-                self.prefs.save();
+            if let Some(mode) = edit::menus(ui, &mut self.editor) {
+                self.set_mode(ui.ctx(), mode);
+            }
+            if std::mem::take(&mut self.editor.settings_requested) {
+                self.settings_open = true;
             }
             crate::ai::menu(ui, &mut self.editor);
             ui.menu_button(tl!("Help"), |ui| {
@@ -144,7 +165,7 @@ impl LocalApp {
                     self.editor.help_open = true;
                     ui.close();
                 }
-                if ui.button(tl!("Check for Updates.")).clicked() {
+                if ui.button(tl!("Check for Updates…")).clicked() {
                     // The outcome shows in the About window, which is where a check belongs.
                     self.about_open = true;
                     self.updater.check_now(ui.ctx());
@@ -165,13 +186,13 @@ impl LocalApp {
         if ui.button(tl!("New map")).clicked() {
             self.new_map();
         }
-        if ui.button(tl!("Open.")).clicked() {
+        if ui.button(tl!("Open…")).clicked() {
             self.ask_open(ui.ctx());
         }
         if ui.button(tl!("Save")).clicked() {
             self.save(ui.ctx());
         }
-        if ui.button(tl!("Save As.")).clicked() {
+        if ui.button(tl!("Save As…")).clicked() {
             self.ask_save_as(ui.ctx());
         }
         ui.separator();
@@ -234,7 +255,7 @@ impl LocalApp {
         if self.editor.doc.map.root().is_none() {
             ui.label(tl!("Nothing open."));
             ui.add_space(6.0);
-            if ui.button(tl!("Open.")).clicked() {
+            if ui.button(tl!("Open…")).clicked() {
                 self.ask_open(ui.ctx());
             }
             return;
@@ -413,9 +434,10 @@ impl LocalApp {
         }
     }
 
+    /// The language row of Settings: the label, then the selector (two grid cells).
     fn language_picker(&mut self, ui: &mut egui::Ui) {
+        ui.label(tl!("Language"));
         ui.horizontal(|ui| {
-            ui.label(tl!("Language"));
             let current = i18n::code();
             egui::ComboBox::from_id_salt("language").selected_text(i18n::name_of(current)).show_ui(ui, |ui| {
                 for (code, name) in i18n::languages() {
@@ -450,6 +472,7 @@ impl LocalApp {
                             self.request_close(ui.ctx());
                         }
                     }
+                    self.shell_buttons(ui);
                 });
             });
         });
@@ -468,12 +491,10 @@ impl LocalApp {
                 ui.label(APP.tagline);
                 ui.add_space(6.0);
                 ui.hyperlink_to(APP.repo, APP.repo_url());
-                ui.add_space(8.0);
-                self.language_picker(ui);
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     let checking = matches!(self.updater.status(), Status::Checking);
-                    if ui.add_enabled(!checking, egui::Button::new(tl!("Check for Updates."))).clicked() {
+                    if ui.add_enabled(!checking, egui::Button::new(tl!("Check for Updates…"))).clicked() {
                         self.updater.check_now(ui.ctx());
                     }
                     match self.updater.status() {
@@ -492,6 +513,35 @@ impl LocalApp {
             });
         self.about_open = open;
     }
+
+    /// Settings: the interface language and the theme (the suite keeps both here; the gear and Edit > Settings…
+    /// open it).
+    fn settings(&mut self, ui: &mut egui::Ui) {
+        let mut open = self.settings_open;
+        let mut mode = self.editor.mode;
+        egui::Window::new(tl!("Settings"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ui.ctx(), |ui| {
+                egui::Grid::new("settings").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    self.language_picker(ui);
+                    ui.end_row();
+                    ui.label(tl!("Theme"));
+                    ui.horizontal(|ui| {
+                        for choice in ThemeMode::EVERY {
+                            ui.selectable_value(&mut mode, choice, tl!(choice.label()));
+                        }
+                    });
+                    ui.end_row();
+                });
+            });
+        if mode != self.editor.mode {
+            self.set_mode(ui.ctx(), mode);
+        }
+        self.settings_open = open;
+    }
 }
 
 impl eframe::App for LocalApp {
@@ -501,8 +551,8 @@ impl eframe::App for LocalApp {
         self.updater.tick(ctx);
 
         // "System" follows the OS while the app runs.
-        if self.editor.follow_system {
-            let theme = self.system_theme(ctx);
+        if self.editor.mode == ThemeMode::System {
+            let theme = self.resolved_theme(ctx);
             if theme != self.editor.theme {
                 self.editor.set_theme(theme);
                 theme.apply(ctx);
@@ -548,7 +598,12 @@ impl eframe::App for LocalApp {
             craft_window::Frame::App(layout) => self.header_bar(ui, &layout),
             // The desktop draws the frame; the menus still need a strip inside the window.
             craft_window::Frame::Desktop => {
-                egui::Panel::top("menu_bar").show(ui, |ui| self.menus(ui));
+                egui::Panel::top("menu_bar").show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        self.menus(ui);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| self.shell_buttons(ui));
+                    });
+                });
             }
         }
 
@@ -556,6 +611,9 @@ impl eframe::App for LocalApp {
 
         if self.about_open {
             self.about(ui);
+        }
+        if self.settings_open {
+            self.settings(ui);
         }
 
         // The update prompt and its progress, drawn last so it sits above the window's content.

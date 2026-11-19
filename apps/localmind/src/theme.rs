@@ -1,36 +1,22 @@
-//! The named themes: the six palettes the original app shipped, mapped onto egui's style and onto
-//! the canvas's own colours.
+//! The two palettes: the dark one the original app shipped as its default and the suite's neutral light one,
+//! mapped onto egui's style and onto the canvas's own colours. Which one shows is the suite's three-state theme
+//! (`craft_icons::ThemeMode`; Automatic follows the OS).
 //!
-//! The values are the original app's `styles.css` variables, translated one to one (`--bg` is the
-//! canvas, `--panel` the cards, `--accent` the selection and the root's bar, `--accent-2` the other
-//! cards' bars, `--canvas-dots` the background grid, `--minimap-*` the minimap). The names are the
-//! original ones: "default" is its dark theme, and the other five are the ones its Settings offered.
+//! The dark values are the original app's `styles.css` variables, translated one to one (`--bg` is the canvas,
+//! `--panel` the cards, `--accent` the selection and the root's bar, `--accent-2` the other cards' bars,
+//! `--canvas-dots` the background grid, `--minimap-*` the minimap).
 
+use craft_icons::ThemeMode;
 use egui::Color32;
 
-/// One of the app's named themes.
+/// One of the app's two palettes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Theme {
-    /// The dark theme the app ships with.
+    /// The dark palette the app ships with.
     #[default]
-    Default,
-    /// The suite's neutral light theme (craft's greys and blue): the counterpart of `Default`.
+    Dark,
+    /// The suite's neutral light palette (craft's greys and blue).
     Light,
-    Nature,
-    DarkBlue,
-    CalmGreen,
-    PastelPink,
-    PunkPrincess,
-}
-
-/// The id the preferences file keeps for "System" (follow the OS light/dark setting).
-pub const SYSTEM_ID: &str = "system";
-
-/// What the Theme menu picks: the OS setting, or one of the named palettes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Choice {
-    System,
-    Named(Theme),
 }
 
 /// The colours one theme gives to the window, the canvas and the minimap.
@@ -58,51 +44,41 @@ pub struct Colors {
     pub dark: bool,
 }
 
-impl Theme {
-    /// The six themes, in the order the original app listed them.
-    pub const ALL: [Theme; 7] =
-        [Theme::Default, Theme::Light, Theme::Nature, Theme::DarkBlue, Theme::CalmGreen, Theme::PastelPink, Theme::PunkPrincess];
+/// The mode a preferences file names. Ids of the palettes older builds offered fall to the side they were
+/// on (a saved choice never breaks the app; the suite has only Automatic, Light and Dark).
+pub fn mode_from_pref(id: &str) -> ThemeMode {
+    match id {
+        "light" | "nature" | "calmgreen" | "pastelpink" => ThemeMode::Light,
+        "dark" | "default" | "darkblue" | "punkprincess" => ThemeMode::Dark,
+        _ => ThemeMode::System,
+    }
+}
 
-    /// The stable id used in the preferences file and in the menu.
+impl Theme {
+    #[cfg(test)]
+    pub const ALL: [Theme; 2] = [Theme::Dark, Theme::Light];
+
+    /// A stable id (the QA renders' file names).
+    #[cfg(test)]
     pub fn id(self) -> &'static str {
         match self {
-            Theme::Default => "default",
+            Theme::Dark => "dark",
             Theme::Light => "light",
-            Theme::Nature => "nature",
-            Theme::DarkBlue => "darkblue",
-            Theme::CalmGreen => "calmgreen",
-            Theme::PastelPink => "pastelpink",
-            Theme::PunkPrincess => "punkprincess",
         }
     }
 
-    /// The theme a preferences file names; an unknown id is the default theme, not an error (a
-    /// preferences file written by a newer build must not keep the app from opening).
-    pub fn from_id(id: &str) -> Theme {
-        Theme::ALL.into_iter().find(|theme| theme.id() == id).unwrap_or_default()
-    }
-
-    /// The theme "System" resolves to: the dark default when the OS is dark, the light theme otherwise.
-    pub fn for_system(dark: bool) -> Theme {
-        if dark { Theme::Default } else { Theme::Light }
-    }
-
-    /// The English source string the catalogs translate.
-    pub fn label(self) -> &'static str {
-        match self {
-            Theme::Default => "Dark (default)",
-            Theme::Light => "Light",
-            Theme::Nature => "Nature",
-            Theme::DarkBlue => "Dark blue",
-            Theme::CalmGreen => "Calm green",
-            Theme::PastelPink => "Pastel pink",
-            Theme::PunkPrincess => "PunkPrincess",
+    /// The palette `mode` shows, given whether the OS is dark (or says nothing).
+    pub fn resolve(mode: ThemeMode, system_dark: bool) -> Theme {
+        match mode {
+            ThemeMode::System if system_dark => Theme::Dark,
+            ThemeMode::System | ThemeMode::Light => Theme::Light,
+            ThemeMode::Dark => Theme::Dark,
         }
     }
 
     pub fn colors(self) -> Colors {
         match self {
-            Theme::Default => Colors {
+            Theme::Dark => Colors {
                 canvas: rgb(0x1a, 0x1c, 0x1f),
                 surface: rgb(0x20, 0x24, 0x2d),
                 panel: rgb(0x25, 0x2a, 0x34),
@@ -134,86 +110,6 @@ impl Theme {
                 minimap_stroke: rgb(0xb8, 0xc2, 0xcf),
                 minimap_mask: rgba(0xf2, 0xf4, 0xf7, 0.6),
                 dark: false,
-            },
-            Theme::Nature => Colors {
-                canvas: rgb(0xee, 0xf1, 0xe9),
-                surface: rgb(0xf8, 0xfa, 0xf5),
-                panel: rgb(0xf8, 0xfa, 0xf5),
-                border: rgb(0xdb, 0xe3, 0xd4),
-                text: rgb(0x2e, 0x3a, 0x2e),
-                muted: rgb(0x64, 0x70, 0x64),
-                accent: rgb(0x7a, 0x9e, 0x7e),
-                accent_second: rgb(0xe8, 0xb4, 0xc8),
-                selection_bg: rgb(0xe6, 0xef, 0xe1),
-                dots: rgb(0xcc, 0xd6, 0xc6),
-                minimap_node: rgb(0xdf, 0xe7, 0xda),
-                minimap_stroke: rgb(0xb9, 0xc6, 0xb2),
-                minimap_mask: rgba(0xee, 0xf1, 0xe9, 0.6),
-                dark: false,
-            },
-            Theme::DarkBlue => Colors {
-                canvas: rgb(0x16, 0x20, 0x2e),
-                surface: rgb(0x1d, 0x2a, 0x3c),
-                panel: rgb(0x1d, 0x2a, 0x3c),
-                border: rgb(0x2d, 0x3f, 0x59),
-                text: rgb(0xe2, 0xe8, 0xf0),
-                muted: rgb(0x85, 0x95, 0xad),
-                accent: rgb(0x3b, 0x82, 0xf6),
-                accent_second: rgb(0x60, 0xa5, 0xfa),
-                selection_bg: rgb(0x1e, 0x3a, 0x5f),
-                dots: rgb(0x1d, 0x2a, 0x3d),
-                minimap_node: rgb(0x2a, 0x3f, 0x5e),
-                minimap_stroke: rgb(0x3d, 0x55, 0x78),
-                minimap_mask: rgba(0x16, 0x20, 0x2e, 0.6),
-                dark: true,
-            },
-            Theme::CalmGreen => Colors {
-                canvas: rgb(0xea, 0xf0, 0xe9),
-                surface: rgb(0xf7, 0xfa, 0xf6),
-                panel: rgb(0xf7, 0xfa, 0xf6),
-                border: rgb(0xd5, 0xe0, 0xd3),
-                text: rgb(0x24, 0x30, 0x2a),
-                muted: rgb(0x61, 0x70, 0x66),
-                accent: rgb(0x4f, 0x7d, 0x5e),
-                accent_second: rgb(0x6f, 0xa0, 0x7e),
-                selection_bg: rgb(0xdc, 0xeb, 0xd9),
-                dots: rgb(0xc9, 0xd5, 0xc6),
-                minimap_node: rgb(0xdb, 0xe4, 0xd8),
-                minimap_stroke: rgb(0xb4, 0xc4, 0xb0),
-                minimap_mask: rgba(0xea, 0xf0, 0xe9, 0.6),
-                dark: false,
-            },
-            Theme::PastelPink => Colors {
-                canvas: rgb(0xf8, 0xeb, 0xf0),
-                surface: rgb(0xfd, 0xf6, 0xf9),
-                panel: rgb(0xfd, 0xf6, 0xf9),
-                border: rgb(0xec, 0xd3, 0xde),
-                text: rgb(0x3a, 0x2a, 0x30),
-                muted: rgb(0x79, 0x67, 0x71),
-                accent: rgb(0xe8, 0x79, 0x9f),
-                accent_second: rgb(0xf4, 0xa9, 0xc4),
-                selection_bg: rgb(0xfb, 0xe4, 0xee),
-                dots: rgb(0xec, 0xd3, 0xde),
-                minimap_node: rgb(0xf3, 0xdc, 0xe6),
-                minimap_stroke: rgb(0xdc, 0xb8, 0xc8),
-                minimap_mask: rgba(0xf8, 0xeb, 0xf0, 0.6),
-                dark: false,
-            },
-            Theme::PunkPrincess => Colors {
-                canvas: rgb(0x1c, 0x12, 0x28),
-                surface: rgb(0x25, 0x17, 0x33),
-                panel: rgb(0x25, 0x17, 0x33),
-                border: rgb(0x3a, 0x28, 0x50),
-                text: rgb(0xf0, 0xe6, 0xff),
-                muted: rgb(0x9a, 0x86, 0xb5),
-                accent: rgb(0xff, 0x2d, 0x95),
-                accent_second: rgb(0x2d, 0xe2, 0xff),
-                selection_bg: rgb(0x33, 0x14, 0x3a),
-                dots: rgb(0x25, 0x16, 0x38),
-                minimap_node: rgb(0x34, 0x1f, 0x4a),
-                minimap_stroke: rgb(0x4a, 0x2f, 0x66),
-                minimap_mask: rgba(0x1c, 0x12, 0x28, 0.6),
-                dark: true,
             },
         }
     }
@@ -263,23 +159,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_theme_has_its_own_id_and_colours() {
-        for (i, theme) in Theme::ALL.iter().enumerate() {
-            assert_eq!(Theme::from_id(theme.id()), *theme);
-            for other in Theme::ALL.iter().skip(i + 1) {
-                assert_ne!(theme.colors(), other.colors(), "{} and {} share a palette", theme.id(), other.id());
-            }
-        }
+    fn the_two_palettes_differ() {
+        assert_ne!(Theme::Dark.colors(), Theme::Light.colors());
+        assert!(Theme::Dark.colors().dark);
+        assert!(!Theme::Light.colors().dark);
     }
 
-    /// The default is the dark theme the app ships with, and an unknown id is not an error.
+    /// A preference written by an older build (one of the five extra palettes) keeps its side, and an
+    /// unknown id follows the system instead of failing.
     #[test]
-    fn an_unknown_id_falls_back_to_the_default_theme() {
-        assert_eq!(Theme::from_id("default"), Theme::Default);
-        assert_eq!(Theme::from_id("nao-existe"), Theme::Default);
-        assert_eq!(Theme::from_id(""), Theme::Default);
-        assert!(Theme::Default.colors().dark);
-        assert!(!Theme::Nature.colors().dark);
+    fn old_and_unknown_theme_ids_map_onto_the_three_modes() {
+        assert_eq!(mode_from_pref("system"), ThemeMode::System);
+        assert_eq!(mode_from_pref("default"), ThemeMode::Dark);
+        for dark in ["dark", "darkblue", "punkprincess"] {
+            assert_eq!(mode_from_pref(dark), ThemeMode::Dark, "{dark}");
+        }
+        for light in ["light", "nature", "calmgreen", "pastelpink"] {
+            assert_eq!(mode_from_pref(light), ThemeMode::Light, "{light}");
+        }
+        assert_eq!(mode_from_pref("nao-existe"), ThemeMode::System);
+        assert_eq!(mode_from_pref(""), ThemeMode::System);
+    }
+
+    #[test]
+    fn automatic_follows_the_system_and_the_others_do_not() {
+        assert_eq!(Theme::resolve(ThemeMode::System, true), Theme::Dark);
+        assert_eq!(Theme::resolve(ThemeMode::System, false), Theme::Light);
+        assert_eq!(Theme::resolve(ThemeMode::Light, true), Theme::Light);
+        assert_eq!(Theme::resolve(ThemeMode::Dark, false), Theme::Dark);
     }
 
     /// The cards must stand out from the canvas in every theme (the original app's pass of "the
@@ -290,13 +197,6 @@ mod tests {
             let colors = theme.colors();
             assert_ne!(colors.canvas, colors.panel, "{}: card and canvas are the same colour", theme.id());
             assert_ne!(colors.text, colors.panel, "{}: text and card are the same colour", theme.id());
-        }
-    }
-
-    #[test]
-    fn every_theme_is_labelled() {
-        for theme in Theme::ALL {
-            assert!(!theme.label().is_empty());
         }
     }
 }

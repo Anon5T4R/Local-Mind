@@ -14,10 +14,10 @@
 @id	language.name	日本語
 	File	ファイル
 	New map	新しいマップ
-	Open.	開く。
+	Open…	開く…
 	Save	保存
-	Save As.	名前を付けて保存。
-	Quit Local Mind	Local Mind を終了
+	Save As…	名前を付けて保存…
+	Exit	終了
 	Edit	編集
 	Undo	元に戻す
 	Redo	やり直す
@@ -31,7 +31,7 @@
 	Zoom in	拡大
 	Zoom out	縮小
 	Help	ヘルプ
-	Check for Updates.	更新を確認。
+	Check for Updates…	更新を確認…
 	About Local Mind	Local Mind について
 	An untitled map	無題のマップ
 	Central idea	中心のアイデア
@@ -69,12 +69,9 @@
 	the map could not be saved: {error}	マップを保存できませんでした: {error}
 	the map could not be exported: {error}	マップを書き出せませんでした: {error}
 	Theme	テーマ
-	System	システム
-	Dark (default)	ダーク (既定)
-	Nature	ネイチャー
-	Dark blue	ダークブルー
-	Calm green	カームグリーン
-	Pastel pink	パステルピンク
+	Dark	ダーク
+	Settings…	設定…
+	Theme: {mode}	テーマ: {mode}
 	Export	書き出し
 	Markdown	Markdown
 	HTML	HTML

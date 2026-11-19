@@ -245,14 +245,14 @@ mod tests {
     /// The empty map has nothing to draw and says so instead of writing a 1x1 image.
     #[test]
     fn an_empty_map_is_an_error() {
-        assert!(render(&map(vec![]), &crate::theme::Theme::Default.colors()).is_err());
+        assert!(render(&map(vec![]), &crate::theme::Theme::Dark.colors()).is_err());
     }
 
     /// The whole pipeline: a map with two cards renders to a PNG big enough to hold them, and the
     /// background is the theme's canvas colour (the cards are painted over it).
     #[test]
     fn a_map_renders_to_a_png_with_the_theme_background() {
-        let colors = crate::theme::Theme::Default.colors();
+        let colors = crate::theme::Theme::Dark.colors();
         let png = render(&map(vec![MindNode::new("r", "Central", None), MindNode::new("a", "Ramo", Some("r".into()))]), &colors).expect("render");
         assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
         // SCALE = 2: a 220-wide card plus padding is at least 300 logical -> 600 physical pixels.
@@ -267,7 +267,7 @@ mod tests {
             return;
         };
         let Ok(fixture) = localmind_io::parse(&text) else { return };
-        for theme in [crate::theme::Theme::Default, crate::theme::Theme::Nature] {
+        for theme in [crate::theme::Theme::Dark, crate::theme::Theme::Light] {
             let png = render(&fixture, &theme.colors()).expect("render");
             assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
             if std::env::var_os("LOCALMIND_QA_RENDER").is_none() {

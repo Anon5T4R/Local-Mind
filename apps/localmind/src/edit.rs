@@ -52,8 +52,10 @@ pub struct Editor {
     pub doc: Document,
     pub view: CanvasView,
     pub theme: Theme,
-    /// The theme follows the OS light/dark setting (the "System" choice); `theme` is what it resolved to.
-    pub follow_system: bool,
+    /// The theme the user picked (Automatic follows the OS); `theme` is the palette it resolved to.
+    pub mode: craft_icons::ThemeMode,
+    /// Edit > Settings… was clicked; the app opens its Settings window and clears this.
+    pub settings_requested: bool,
     pub ai: crate::ai::Ai,
     pub selected: Option<String>,
     pub editing: Option<Editing>,
@@ -108,7 +110,8 @@ impl Editor {
             doc,
             view: CanvasView::default(),
             theme: Theme::default(),
-            follow_system: false,
+            mode: craft_icons::ThemeMode::Dark,
+            settings_requested: false,
             ai: crate::ai::Ai::default(),
             selected,
             editing: None,
@@ -1101,7 +1104,7 @@ impl Editor {
 
 /// The Edit and View menus, shared by the window and the headless tests (they only touch the
 /// editor). Returns the theme choice the user made, so the caller can apply and save it.
-pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<crate::theme::Choice> {
+pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<craft_icons::ThemeMode> {
     let mut chosen = None;
     ui.menu_button(tl!("Edit"), |ui| {
         if ui.add_enabled(editor.can_undo(), egui::Button::new(tl!("Undo"))).clicked() {
@@ -1151,6 +1154,11 @@ pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<crate::theme::Cho
             editor.delete(id);
             ui.close();
         }
+        ui.separator();
+        if ui.button(tl!("Settings…")).clicked() {
+            editor.settings_requested = true;
+            ui.close();
+        }
     });
     ui.menu_button(tl!("View"), |ui| {
         if ui.button(tl!("Fit to window")).clicked() {
@@ -1167,16 +1175,11 @@ pub fn menus(ui: &mut egui::Ui, editor: &mut Editor) -> Option<crate::theme::Cho
         }
         ui.separator();
         ui.menu_button(tl!("Theme"), |ui| {
-            if ui.selectable_label(editor.follow_system, tl!("System")).clicked() {
-                editor.follow_system = true;
-                chosen = Some(crate::theme::Choice::System);
-                ui.close();
-            }
-            for theme in Theme::ALL {
-                if ui.selectable_label(!editor.follow_system && editor.theme == theme, tl!(theme.label())).clicked() {
-                    editor.follow_system = false;
-                    editor.set_theme(theme);
-                    chosen = Some(crate::theme::Choice::Named(theme));
+            for mode in craft_icons::ThemeMode::EVERY {
+                if ui.selectable_label(editor.mode == mode, tl!(mode.label())).clicked() {
+                    editor.mode = mode;
+                    editor.set_theme(Theme::resolve(mode, ui.ctx().system_theme() != Some(egui::Theme::Light)));
+                    chosen = Some(mode);
                     ui.close();
                 }
             }
@@ -1602,11 +1605,11 @@ mod tests {
     #[test]
     fn the_export_follows_the_theme() {
         let mut editor = editor();
-        editor.set_theme(Theme::Nature);
+        editor.set_theme(Theme::Light);
         let html = editor.exported(ExportKind::Html);
-        let nature = crate::export::html(&editor.doc.map, &Theme::Nature.colors(), "en");
-        assert_eq!(html, nature);
-        editor.set_theme(Theme::PunkPrincess);
+        let light = crate::export::html(&editor.doc.map, &Theme::Light.colors(), "en");
+        assert_eq!(html, light);
+        editor.set_theme(Theme::Dark);
         assert_ne!(editor.exported(ExportKind::Html), html);
     }
 }
