@@ -18,8 +18,9 @@ repository = "https://github.com/Anon5T4R/Local-Mind"
 # Vendored craft libs (libs/craft-libs). `crates/update` comes from the suite's single source,
 # Anon5T4R/local-libs: the copy here is a mirror, never edited in place.
 # Not wired while nothing uses them (an unused workspace dependency is a cargo warning):
-# `craft-ui` (widgets/icons/theme), `egui_extras` (tables/images/svg), `serde`/`serde_json` (the
-# app's own settings). Add the line back when the first crate needs it.
+# `craft-ui` (widgets/icons/theme). Add the line back when the first crate needs it.
+# The suite's icons for shared concepts (theme, settings, help, AI…) and the theme button. Source: local-libs.
+craft-icons = { path = "libs/craft-libs/crates/icons/", features = ["egui"] }
 craft-i18n = { path = "libs/craft-libs/crates/i18n/" }
 craft-update = { version = "=0.1.0", path = "libs/craft-libs/crates/update/", features = ["egui", "icons"] }
 # The suite's AI surface (connections form, status strip, chat panel). Source: local-libs.
@@ -55,6 +56,8 @@ miniz_oxide = "0.8"
 # `monochrome_emoji_fonts`. Every resolution root (native, kittest, wasm) needs both.
 egui = { version = "0.37", default-features = false, features = ["default_fonts", "monochrome_emoji_fonts"] }
 eframe = { version = "0.37", default-features = false }
+# The SVG loader for the suite's icons (craft-icons): resvg, pure Rust. Vendored fork via [patch].
+egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 # Native file dialogs: defaults on purpose (Linux gets the XDG portal through zbus, pure Rust;
 # never `default-features = false` - the mold is local-pdf, see the docs in `src/pickers.rs`).
 rfd = "0.17"
