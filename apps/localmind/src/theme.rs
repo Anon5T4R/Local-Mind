@@ -54,6 +54,29 @@ pub fn mode_from_pref(id: &str) -> ThemeMode {
     }
 }
 
+impl Colors {
+    /// The ink for text and glyphs painted on the accent fill (selection, the hot "+" corner): white or black,
+    /// whichever contrasts more, so it holds 4.5:1 in both themes (white on the dark violet would be 4.35).
+    pub fn on_accent(&self) -> Color32 {
+        if contrast(self.accent, Color32::WHITE) >= contrast(self.accent, Color32::BLACK) { Color32::WHITE } else { Color32::BLACK }
+    }
+}
+
+/// WCAG relative luminance of an opaque colour.
+fn luminance(color: Color32) -> f32 {
+    let channel = |value: u8| {
+        let v = f32::from(value) / 255.0;
+        if v <= 0.039_28 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
+}
+
+/// WCAG contrast ratio of two opaque colours: 1 (none) to 21 (black on white).
+fn contrast(a: Color32, b: Color32) -> f32 {
+    let (a, b) = (luminance(a), luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
 impl Theme {
     #[cfg(test)]
     pub const ALL: [Theme; 2] = [Theme::Dark, Theme::Light];
@@ -138,7 +161,7 @@ impl Theme {
         visuals.widgets.active.bg_stroke = egui::Stroke::new(1.0, colors.accent);
         visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, colors.text);
         visuals.selection.bg_fill = colors.accent;
-        visuals.selection.stroke = egui::Stroke::new(1.0, colors.text);
+        visuals.selection.stroke = egui::Stroke::new(1.0, colors.on_accent());
         visuals.hyperlink_color = colors.accent_second;
         visuals.warn_fg_color = colors.accent_second;
         visuals.error_fg_color = rgb(0xe7, 0x4c, 0x3c);
@@ -187,6 +210,21 @@ mod tests {
         assert_eq!(Theme::resolve(ThemeMode::System, false), Theme::Light);
         assert_eq!(Theme::resolve(ThemeMode::Light, true), Theme::Light);
         assert_eq!(Theme::resolve(ThemeMode::Dark, false), Theme::Dark);
+    }
+
+    /// The accent as a button/selection fill holds 4.5:1 against its ink in both themes, and as a drawn mark
+    /// (the "+" corners, the focus stroke) it holds 3:1 against the surfaces it sits on.
+    #[test]
+    fn the_accent_holds_its_contrast_in_both_themes() {
+        for theme in Theme::ALL {
+            let colors = theme.colors();
+            let on_fill = contrast(colors.accent, colors.on_accent());
+            assert!(on_fill >= 4.5, "{}: ink on the accent fill is {on_fill:.2}:1", theme.id());
+            for (name, ground) in [("canvas", colors.canvas), ("surface", colors.surface), ("panel", colors.panel)] {
+                let as_mark = contrast(colors.accent, ground);
+                assert!(as_mark >= 3.0, "{}: the accent on the {name} is {as_mark:.2}:1", theme.id());
+            }
+        }
     }
 
     /// The cards must stand out from the canvas in every theme (the original app's pass of "the

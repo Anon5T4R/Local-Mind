@@ -616,7 +616,7 @@ fn hot_corners(
         painter.circle_filled(center, radius, fill);
         dashed_circle(painter, center, radius, colors.accent, (view.zoom).clamp(0.5, 1.5));
         let arm = radius * 0.45;
-        let ink = if hot { colors.canvas } else { colors.accent };
+        let ink = if hot { colors.on_accent() } else { colors.accent };
         let stroke = Stroke::new((1.5 * view.zoom).clamp(1.0, 2.5), ink);
         painter.line_segment([pos2(center.x - arm, center.y), pos2(center.x + arm, center.y)], stroke);
         painter.line_segment([pos2(center.x, center.y - arm), pos2(center.x, center.y + arm)], stroke);
