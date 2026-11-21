@@ -166,10 +166,7 @@ fn every_dialog_fits_the_narrow_window() {
                 // The long-named node is the interesting subject of the dialogs that name one.
                 let id = sofa.expect("the long node exists");
                 open(app.editor_mut(), &id);
-                // The connections form is the `craft-ai-ui` mirror: its provider/URL/model/key fields have no
-                // `labelled_by` yet, and a mirror is only edited at the source (local-libs). Until that lands, this one
-                // dialog keeps the name check off; its width is still checked.
-                let mut harness = harness_with(app, NARROW, name != "connections");
+                let mut harness = harness_with(app, NARROW, true);
                 harness.run_steps(4);
                 shot(&mut harness, &format!("{frame_name}-{name}-{language}-{theme}-900"));
                 assert_inside(&harness, NARROW, &format!("{frame_name} {name} {language}"));
