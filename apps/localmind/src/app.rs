@@ -33,6 +33,16 @@ enum Pending {
     Export(edit::ExportKind),
 }
 
+/// The windows of the shell (not of the editor) a test can open.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Shell {
+    About,
+    Settings,
+    Palette,
+    Unsaved,
+}
+
 pub struct LocalApp {
     updater: Updater,
     pickers: Pickers,
@@ -493,10 +503,10 @@ impl LocalApp {
 
     /// The language row of Settings: the label, then the selector (two grid cells).
     fn language_picker(&mut self, ui: &mut egui::Ui) {
-        ui.label(tl!("Language"));
+        let label = ui.label(tl!("Language"));
         ui.horizontal(|ui| {
             let current = i18n::code();
-            egui::ComboBox::from_id_salt("language").selected_text(i18n::name_of(current)).show_ui(ui, |ui| {
+            let combo = egui::ComboBox::from_id_salt("language").selected_text(i18n::name_of(current)).show_ui(ui, |ui| {
                 for (code, name) in i18n::languages() {
                     if ui.selectable_label(code == current, name).clicked() && code != current {
                         self.prefs.language = code.to_string();
@@ -505,6 +515,7 @@ impl LocalApp {
                     }
                 }
             });
+            combo.response.labelled_by(label.id);
             if self.prefs.language == i18n::AUTO {
                 ui.label(tl!("(following the system)"));
             }
@@ -651,6 +662,71 @@ impl eframe::App for LocalApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.draw(ui);
+    }
+}
+
+impl LocalApp {
+    /// The app as the headless tests build it: no `eframe` creation context, no saved preferences read or written
+    /// (the caller's `prefs` are used as given; the tests never change the theme or the language, which save them).
+    #[cfg(test)]
+    pub(crate) fn for_test(frame: craft_window::Frame, prefs: Prefs, doc: Document, mode: ThemeMode) -> Self {
+        let theme = crate::theme::Theme::resolve(mode, true);
+        let mut editor = Editor::new(doc);
+        editor.set_theme(theme);
+        editor.mode = mode;
+        Self {
+            updater: Updater::new(&APP, env!("CARGO_PKG_VERSION")),
+            pickers: Pickers::default(),
+            frame,
+            about_open: false,
+            settings_open: false,
+            palette: craft_palette::Palette::default(),
+            prefs,
+            editor,
+            pending: None,
+            close: close::Guard::default(),
+            error: None,
+            window_title: String::new(),
+        }
+    }
+
+    /// Which shell window to show, for the tests.
+    #[cfg(test)]
+    pub(crate) fn show_for_test(&mut self, what: Shell) {
+        match what {
+            Shell::About => self.about_open = true,
+            Shell::Settings => self.settings_open = true,
+            Shell::Palette => self.palette.open(),
+            Shell::Unsaved => {
+                self.editor.doc.dirty = true;
+                self.request_close(&egui::Context::default());
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn language(&self) -> String {
+        self.prefs.language.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn theme(&self) -> crate::theme::Theme {
+        self.editor.theme
+    }
+
+    #[cfg(test)]
+    pub(crate) fn editor_mut(&mut self) -> &mut Editor {
+        &mut self.editor
+    }
+
+    #[cfg(test)]
+    pub(crate) fn draw_for_test(&mut self, ui: &mut egui::Ui) {
+        self.draw(ui);
+    }
+
+    /// The whole window, without the `eframe::Frame` (which the headless tests do not have).
+    fn draw(&mut self, ui: &mut egui::Ui) {
         match self.frame.clone() {
             craft_window::Frame::App(layout) => self.header_bar(ui, &layout),
             // The desktop draws the frame; the menus still need a strip inside the window.

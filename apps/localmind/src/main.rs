@@ -26,6 +26,8 @@ mod suite_entry;
 mod theme;
 
 #[cfg(test)]
+mod ui_guards;
+#[cfg(test)]
 mod ui_tests;
 
 use app::LocalApp;

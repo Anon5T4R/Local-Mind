@@ -863,9 +863,10 @@ impl Editor {
             .default_width(420.0)
             .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(egui::RichText::new(subject).weak());
+                let subject_label = ui.label(egui::RichText::new(subject).weak());
                 ui.add_space(4.0);
                 let field = ui.add(egui::TextEdit::multiline(&mut note.draft).desired_rows(8).desired_width(f32::INFINITY));
+                let field = field.labelled_by(subject_label.id);
                 field.request_focus();
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
@@ -917,14 +918,14 @@ impl Editor {
             .default_width(420.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
             .show(ctx, |ui| {
-                ui.label(egui::RichText::new(subject.clone()).weak());
+                let subject_label = ui.label(egui::RichText::new(subject.clone()).weak());
                 ui.add_space(4.0);
                 let current = state
                     .choice
                     .clone()
                     .and_then(|id| self.doc.map.node(&id).map(|n| n.text.clone()))
                     .unwrap_or_else(|| tl!("Choose a new parent").to_string());
-                egui::ComboBox::from_id_salt("move-to").selected_text(current).show_ui(ui, |ui| {
+                let target_combo = egui::ComboBox::from_id_salt("move-to").selected_text(current).show_ui(ui, |ui| {
                     for id in &targets {
                         let label = self.doc.map.node(id).map(|n| n.text.clone()).unwrap_or_default();
                         if ui.selectable_label(state.choice.as_deref() == Some(id.as_str()), label).clicked() {
@@ -932,13 +933,14 @@ impl Editor {
                         }
                     }
                 });
+                target_combo.response.labelled_by(subject_label.id);
                 // Under the root, the branch can be sent to any of the four directions; the field
                 // is meaningless deeper, so the selector only shows for the root.
                 if state.choice.as_deref() == root.as_deref() {
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
-                        ui.label(tl!("Side"));
-                        egui::ComboBox::from_id_salt("move-to-side").selected_text(side_label(state.side)).show_ui(ui, |ui| {
+                        let side_title = ui.label(tl!("Side"));
+                        let side_combo = egui::ComboBox::from_id_salt("move-to-side").selected_text(side_label(state.side)).show_ui(ui, |ui| {
                             for (label, side) in [
                                 (tl!("Automatic"), None),
                                 (tl!("Left"), Some(Side::Left)),
@@ -951,6 +953,7 @@ impl Editor {
                                 }
                             }
                         });
+                        side_combo.response.labelled_by(side_title.id);
                     });
                 }
                 ui.add_space(6.0);

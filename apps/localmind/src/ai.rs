@@ -699,13 +699,13 @@ fn generate_dialog(ui: &mut egui::Ui, editor: &mut Editor) {
         .default_width(420.0)
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .show(&ctx, |ui| {
-            ui.label(egui::RichText::new(crate::tl!("A topic, or a whole text to organize.")).weak());
-            ui.add(egui::TextEdit::multiline(&mut topic).desired_rows(5).desired_width(f32::INFINITY));
+            let hint = ui.label(egui::RichText::new(crate::tl!("A topic, or a whole text to organize.")).weak());
+            ui.add(egui::TextEdit::multiline(&mut topic).desired_rows(5).desired_width(f32::INFINITY)).labelled_by(hint.id);
             ui.horizontal(|ui| {
-                ui.label(crate::tl!("Depth"));
-                ui.add(egui::DragValue::new(&mut depth).range(1..=4));
-                ui.label(crate::tl!("Breadth"));
-                ui.add(egui::DragValue::new(&mut breadth).range(2..=8));
+                let depth_label = ui.label(crate::tl!("Depth"));
+                ui.add(egui::DragValue::new(&mut depth).range(1..=4)).labelled_by(depth_label.id);
+                let breadth_label = ui.label(crate::tl!("Breadth"));
+                ui.add(egui::DragValue::new(&mut breadth).range(2..=8)).labelled_by(breadth_label.id);
             });
             let mut color = editor.ai.generate_color;
             if ui.checkbox(&mut color, crate::tl!("Color branches")).changed() {
@@ -747,8 +747,8 @@ fn rewrite_dialog(ui: &mut egui::Ui, editor: &mut Editor) {
         .default_width(420.0)
         .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
         .show(&ctx, |ui| {
-            ui.label(egui::RichText::new(subject.clone()).weak());
-            ui.add(egui::TextEdit::multiline(&mut instruction).desired_rows(3).desired_width(f32::INFINITY));
+            let hint = ui.label(egui::RichText::new(subject.clone()).weak());
+            ui.add(egui::TextEdit::multiline(&mut instruction).desired_rows(3).desired_width(f32::INFINITY)).labelled_by(hint.id);
             ui.horizontal_wrapped(|ui| {
                 for preset in [crate::tl!("shorter"), crate::tl!("more technical"), crate::tl!("as a question"), crate::tl!("fix the wording")] {
                     if ui.button(preset).clicked() {
