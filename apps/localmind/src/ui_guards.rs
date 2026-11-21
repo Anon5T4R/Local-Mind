@@ -107,13 +107,15 @@ fn assert_bar_buttons(harness: &Harness<'_, LocalApp>, size: egui::Vec2, what: &
 fn the_shell_windows_fit_the_narrow_window() {
     for (frame_name, frame) in frames() {
         for what in [Shell::About, Shell::Settings, Shell::Palette, Shell::Unsaved] {
-            for language in ["en", "pt-br"] {
-                let mut app = app(frame.clone(), language, ThemeMode::Dark);
-                app.show_for_test(what);
-                let mut harness = harness(app, NARROW);
-                harness.run_steps(4);
-                shot(&mut harness, &format!("{frame_name}-{what:?}-{language}-900").to_lowercase());
-                assert_inside(&harness, NARROW, &format!("{frame_name} {what:?} {language}"));
+            for (language, mode, theme) in [("en", ThemeMode::Dark, "dark"), ("pt-br", ThemeMode::Light, "light")] {
+                for size in [NARROW, MEDIUM] {
+                    let mut app = app(frame.clone(), language, mode);
+                    app.show_for_test(what);
+                    let mut harness = harness(app, size);
+                    harness.run_steps(4);
+                    shot(&mut harness, &format!("{frame_name}-{what:?}-{language}-{theme}-{}", size.x).to_lowercase());
+                    assert_inside(&harness, size, &format!("{frame_name} {what:?} {language}"));
+                }
             }
         }
     }
@@ -152,15 +154,15 @@ fn every_dialog_fits_the_narrow_window() {
     ];
     for (frame_name, frame) in frames() {
         for (name, open) in dialogs {
-            for language in ["en", "pt-br"] {
-                let mut app = app(frame.clone(), language, ThemeMode::Light);
+            for (language, mode, theme) in [("en", ThemeMode::Dark, "dark"), ("pt-br", ThemeMode::Light, "light")] {
+                let mut app = app(frame.clone(), language, mode);
                 let sofa = app.editor_mut().doc.map.nodes.iter().find(|n| n.text.starts_with("Pontuação SOFA")).map(|n| n.id.clone());
                 // The long-named node is the interesting subject of the dialogs that name one.
                 let id = sofa.expect("the long node exists");
                 open(app.editor_mut(), &id);
                 let mut harness = harness(app, NARROW);
                 harness.run_steps(4);
-                shot(&mut harness, &format!("{frame_name}-{name}-{language}-900"));
+                shot(&mut harness, &format!("{frame_name}-{name}-{language}-{theme}-900"));
                 assert_inside(&harness, NARROW, &format!("{frame_name} {name} {language}"));
             }
         }
