@@ -79,7 +79,7 @@ fn shot(harness: &mut Harness<'_, LocalApp>, name: &str) {
 fn assert_inside(harness: &Harness<'_, LocalApp>, size: egui::Vec2, what: &str) {
     for node in harness.root().children_recursive() {
         let Some(rect) = node.accesskit_node().bounding_box() else { continue };
-        if rect.width() > 0.0 && rect.height() > 0.0 && !scrolled_row(&node) {
+        if rect.width() > 0.0 && rect.height() > 0.0 && !scrolled_row(&node, size.y) {
             assert!(
                 rect.x0 >= -0.5 && rect.x1 <= f64::from(size.x) + 0.5 && rect.y0 >= -0.5 && rect.y1 <= f64::from(size.y) + 0.5,
                 "{what}: {:?} {:?} sai da janela de {size:?}: {rect:?}",
@@ -91,9 +91,10 @@ fn assert_inside(harness: &Harness<'_, LocalApp>, size: egui::Vec2, what: &str) 
 }
 
 /// A list row (the palette) scrolled out of its scroll area keeps its node, but the area clips it: the user does
-/// not see it cut. The area itself and the rows in view are still checked.
-fn scrolled_row(node: &egui_kittest::Node<'_>) -> bool {
-    node.accesskit_node().role() == Role::ListBoxOption && node.accesskit_node().bounding_box().is_some_and(|r| r.y1 > 600.0)
+/// not see it cut. The area itself and the rows in view are still checked; only rows past the window's height are
+/// skipped.
+fn scrolled_row(node: &egui_kittest::Node<'_>, height: f32) -> bool {
+    node.accesskit_node().role() == Role::ListBoxOption && node.accesskit_node().bounding_box().is_some_and(|r| r.y1 > f64::from(height))
 }
 
 /// The buttons of the top bar (icon only: search, theme, gear) are all on screen and do not overlap each other.
