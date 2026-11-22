@@ -12,6 +12,7 @@
 
 mod ai;
 mod app;
+mod automation;
 mod canvas;
 mod close;
 mod doc;
@@ -19,6 +20,7 @@ mod edit;
 mod export;
 mod fonts;
 mod i18n;
+mod live;
 mod pickers;
 mod png;
 mod prefs;
@@ -58,6 +60,12 @@ you already have open as they are.
 
 The interface language follows the system's; the About window (Help menu) lets you pick another
 one and checks for updates. Updates install from the GitHub releases of Anon5T4R/Local-Mind.
+
+SCRIPTS AND AI AGENTS:
+  localmind commands [--search TEXT]     every command as JSON (the palette's ids)
+  localmind mcp [--connect PORT] [--headless]   the MCP server on stdio; --connect drives a running
+                                         app (`localmind --control PORT`)
+  localmind run --script job.json        headless steps, one JSON result per line
 ";
 
 fn main() -> eframe::Result {
@@ -69,7 +77,39 @@ fn main() -> eframe::Result {
 
     let mut initial: Option<std::path::PathBuf> = None;
     let mut unknown: Vec<String> = Vec::new();
-    for arg in std::env::args().skip(1) {
+    // Agent-native: `mcp`, `run` e `commands` saem antes da janela; o `--control PORT` e as
+    // raízes de automação saem dos args antes do parser da janela (que lê o resto como sempre).
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = automation::cli::run(&args) {
+        std::process::exit(code);
+    }
+    let launch = match automation::launch::parse(&args) {
+        Ok(launch) => launch,
+        Err(e) => {
+            eprintln!("{}: {e}", APP.id);
+            std::process::exit(2);
+        }
+    };
+    let roots = match launch.roots.roots() {
+        Ok(roots) => roots,
+        Err(e) => {
+            eprintln!("{}: {e}", APP.id);
+            std::process::exit(2);
+        }
+    };
+    // O canal de controle escuta em loopback antes da janela: porta ocupada falha aqui.
+    let control = match launch.control.map(automation::control::Control::start) {
+        None => None,
+        Some(Ok(control)) => {
+            eprintln!("{}: control channel on 127.0.0.1:{}", APP.id, control.port());
+            Some(control)
+        }
+        Some(Err(e)) => {
+            eprintln!("{}: {e}", APP.id);
+            std::process::exit(1);
+        }
+    };
+    for arg in &launch.args {
         match arg.as_str() {
             "--version" => {
                 println!("{} {}", APP.id, env!("CARGO_PKG_VERSION"));
@@ -105,7 +145,11 @@ fn main() -> eframe::Result {
     eframe::run_native(
         APP.name,
         eframe::NativeOptions { viewport, ..Default::default() },
-        Box::new(move |cc| Ok(Box::new(LocalApp::new(cc, frame, initial)))),
+        Box::new(move |cc| {
+            let mut app = LocalApp::new(cc, frame, initial);
+            app.attach_control(control, roots);
+            Ok(Box::new(app))
+        }),
     )
 }
 

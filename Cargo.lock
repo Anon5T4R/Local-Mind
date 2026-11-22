@@ -959,6 +959,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-mcp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "craft-palette"
 version = "0.1.0"
 dependencies = [
@@ -2611,6 +2618,7 @@ dependencies = [
  "craft-desktop-theme",
  "craft-i18n",
  "craft-icons",
+ "craft-mcp",
  "craft-palette",
  "craft-update",
  "craft-window",
