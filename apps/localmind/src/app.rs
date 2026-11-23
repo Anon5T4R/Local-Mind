@@ -56,17 +56,26 @@ pub struct LocalApp {
     palette: craft_palette::Palette,
     /// The settings the app remembers between runs (the interface language).
     prefs: Prefs,
-    editor: Editor,
+    pub(crate) editor: Editor,
     pending: Option<Pending>,
     /// The unsaved-changes guard on window close.
     close: close::Guard,
     /// The last failure, shown until dismissed: a map that could not be read must say so.
-    error: Option<String>,
+    pub(crate) error: Option<String>,
     /// The title currently on the window, so it is only sent when it changes.
     window_title: String,
+    /// The control channel of `--control PORT` (agents and scripts), when the app was started with it.
+    pub(crate) control: Option<crate::automation::control::Control>,
+    /// The automation roots given with `--control` (none: nothing is confined).
+    pub(crate) roots: Option<craft_mcp::automation::Roots>,
 }
 
 impl LocalApp {
+    /// Give the window the control channel and the roots it enforces (`--control PORT`).
+    pub(crate) fn attach_control(&mut self, control: Option<crate::automation::control::Control>, roots: Option<craft_mcp::automation::Roots>) {
+        self.control = control;
+        self.roots = roots;
+    }
     pub fn new(cc: &eframe::CreationContext<'_>, frame: craft_window::Frame, initial: Option<PathBuf>) -> Self {
         crate::fonts::install(&cc.egui_ctx);
         // Linux: the desktop's light/dark choice, which winit does not report.
@@ -92,6 +101,8 @@ impl LocalApp {
             close: close::Guard::default(),
             error: None,
             window_title: String::new(),
+            control: None,
+            roots: None,
         };
         app.editor.set_theme(theme);
         app.editor.mode = mode;
@@ -688,6 +699,8 @@ impl LocalApp {
             close: close::Guard::default(),
             error: None,
             window_title: String::new(),
+            control: None,
+            roots: None,
         }
     }
 
@@ -727,6 +740,8 @@ impl LocalApp {
 
     /// The whole window, without the `eframe::Frame` (which the headless tests do not have).
     fn draw(&mut self, ui: &mut egui::Ui) {
+        // The control channel (`--control PORT`): answer what the agent asked, with the map's state.
+        self.pump_control(ui.ctx());
         match self.frame.clone() {
             craft_window::Frame::App(layout) => self.header_bar(ui, &layout),
             // The desktop draws the frame; the menus still need a strip inside the window.
