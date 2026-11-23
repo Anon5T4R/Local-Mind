@@ -67,7 +67,7 @@ impl LocalApp {
     }
 
     /// Runs what the palette returned, through the same calls as the menus.
-    pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str) {
+    pub(crate) fn run_command(&mut self, ctx: &egui::Context, id: &str) {
         let selected = self.editor.selected.clone();
         match id {
             "file.new" => self.new_map(),
