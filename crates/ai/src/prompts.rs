@@ -47,7 +47,7 @@ pub fn fill(template: &str, pairs: &[(&str, &str)]) -> String {
 const EN: Prompts = Prompts {
     answer_in: "Answer in English.",
     system: "You are a brainstorming assistant that structures ideas into mind maps.\n{answer_in}\nAnswer ALWAYS and ONLY with valid JSON: no markdown, no comments, no text outside the JSON.\nKeep every item short (1 to 5 words when possible).",
-    chat_system: "You are an assistant inside a mind map app (LocalMindmap). {answer_in} Be clear and organized, and use lists when they help. You may suggest mind map structures.",
+    chat_system: "You are an assistant inside a mind map app (Local Mindmap). {answer_in} Be clear and organized, and use lists when they help. You may suggest mind map structures.",
     gen_long: "Organize the CONTENT below into a mind map, extracting the main themes and subtopics:\n\n\"\"\"{topic}\"\"\"",
     gen_short: "Create a mind map about the topic: \"{topic}\".",
     gen_rules: "Rules:\n- The central node (the root's \"text\") must be the main subject, short and specific (never \"Mind map\" or \"Topic\").\n- Generate about {breadth} first-level branches, each with a meaningful label (avoid generic ones like \"Definition\" or \"Importance\" unless they fit).\n- Depth up to {depth} levels. Every item short (1 to 5 words).\nEXACT format:\n{\"text\":\"<central subject>\",\"children\":[{\"text\":\"<branch>\",\"children\":[{\"text\":\"<subitem>\"}]}]}\nReturn only that JSON.",
@@ -63,7 +63,7 @@ const EN: Prompts = Prompts {
 const PT_BR: Prompts = Prompts {
     answer_in: "Responda em português do Brasil.",
     system: "Você é um assistente de brainstorming que estrutura ideias em mapas mentais.\n{answer_in}\nResponda SEMPRE e SOMENTE com JSON válido: sem markdown, sem comentários, sem texto fora do JSON.\nMantenha cada item curto (1 a 5 palavras quando possível).",
-    chat_system: "Você é um assistente dentro de um app de mapas mentais (LocalMindmap). {answer_in} Seja claro e organizado, e use listas quando ajudarem. Você pode sugerir estruturas de mapa mental.",
+    chat_system: "Você é um assistente dentro de um app de mapas mentais (Local Mindmap). {answer_in} Seja claro e organizado, e use listas quando ajudarem. Você pode sugerir estruturas de mapa mental.",
     gen_long: "Organize o CONTEÚDO a seguir em um mapa mental, extraindo os temas e subtemas principais:\n\n\"\"\"{topic}\"\"\"",
     gen_short: "Crie um mapa mental sobre o tema: \"{topic}\".",
     gen_rules: "Regras:\n- O nó central (o \"text\" da raiz) deve ser o assunto principal, curto e específico (NÃO use \"Mapa mental\" nem \"Tema\").\n- Gere cerca de {breadth} ramos no primeiro nível, cada um com um rótulo significativo (evite genéricos como \"Definição\" ou \"Importância\" salvo se fizer sentido).\n- Profundidade de até {depth} níveis. Cada item curto (1 a 5 palavras).\nFormato EXATO:\n{\"text\":\"<tema central>\",\"children\":[{\"text\":\"<ramo>\",\"children\":[{\"text\":\"<subitem>\"}]}]}\nRetorne apenas esse JSON.",
@@ -79,7 +79,7 @@ const PT_BR: Prompts = Prompts {
 const ES: Prompts = Prompts {
     answer_in: "Responde en español.",
     system: "Eres un asistente de brainstorming que estructura ideas en mapas mentales.\n{answer_in}\nResponde SIEMPRE y SOLO con JSON válido: sin markdown, sin comentarios, sin texto fuera del JSON.\nMantén cada elemento corto (1 a 5 palabras cuando sea posible).",
-    chat_system: "Eres un asistente dentro de una app de mapas mentales (LocalMindmap). {answer_in} Sé claro y organizado, y usa listas cuando ayuden. Puedes sugerir estructuras de mapa mental.",
+    chat_system: "Eres un asistente dentro de una app de mapas mentales (Local Mindmap). {answer_in} Sé claro y organizado, y usa listas cuando ayuden. Puedes sugerir estructuras de mapa mental.",
     gen_long: "Organiza el CONTENIDO de abajo en un mapa mental, extrayendo los temas y subtemas principales:\n\n\"\"\"{topic}\"\"\"",
     gen_short: "Crea un mapa mental sobre el tema: \"{topic}\".",
     gen_rules: "Reglas:\n- El nodo central (el \"text\" de la raíz) debe ser el asunto principal, corto y específico (NO uses \"Mapa mental\" ni \"Tema\").\n- Genera unos {breadth} ramos en el primer nivel, cada uno con una etiqueta significativa (evita genéricos como \"Definición\" o \"Importancia\" salvo que encajen).\n- Profundidad de hasta {depth} niveles. Cada elemento corto (1 a 5 palabras).\nFormato EXACTO:\n{\"text\":\"<tema central>\",\"children\":[{\"text\":\"<ramo>\",\"children\":[{\"text\":\"<subelemento>\"}]}]}\nDevuelve solo ese JSON.",

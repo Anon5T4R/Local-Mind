@@ -11,7 +11,8 @@ use localmindmap_ai::actions::{self, Request};
 use localmindmap_model::MindMap;
 
 fn app() -> App {
-    App { id: "LocalMind", url: "https://github.com/Styx-Studios/Local-Mindmap" }
+    // The id the app hands the client after the rename (it carried `LocalMind` before).
+    App { id: "LocalMindmap", url: "https://github.com/Styx-Studios/Local-Mindmap" }
 }
 
 fn connection() -> Connection {

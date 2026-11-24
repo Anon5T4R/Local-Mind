@@ -134,6 +134,12 @@ fn main() -> eframe::Result {
         std::process::exit(2);
     }
 
+    // The product was renamed (Local Mind -> Local Mindmap): move the old-named folders over once
+    // and copy the keychain keys, before the window reads any of them (preferences, AI connections,
+    // the updater's folders). The headless paths above read maps only, and the tests that run this
+    // binary drive those paths, so a test run never moves a user's real folders.
+    legacy::migrate_all();
+
     // Who draws the window frame: this is the suite's one decision (the desktop on Windows, macOS
     // and X11; on Wayland, the compositor when it offers server-side decorations, the app on GNOME's
     // Mutter). `LOCALMINDMAP_TITLEBAR=app|system` overrides it.
@@ -177,5 +183,15 @@ mod tests {
         for flag in ["-h", "--help", "--version", "FILE"] {
             assert!(HELP.contains(flag), "{flag} is parsed but not documented");
         }
+    }
+
+    /// The packaging id is spent in more than one place: the `.desktop` file has to exist, start the
+    /// binary this crate builds and name the icon after `APP_ID`.
+    #[test]
+    fn the_desktop_file_starts_this_binary() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging/linux/com.localmind.app.desktop");
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        assert!(text.contains(&format!("Exec={} %F", APP.id)), "the entry does not start `{}`", APP.id);
+        assert!(text.contains(&format!("Icon={APP_ID}")), "the icon is not `{APP_ID}`");
     }
 }

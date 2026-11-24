@@ -132,8 +132,10 @@ mod tests {
     /// The live backend exists and carries the app identity (no request is made here).
     #[test]
     fn the_live_backend_carries_the_app_identity() {
-        let backend = LiveBackend::new("LocalMind", "https://github.com/Styx-Studios/Local-Mindmap");
-        assert_eq!(backend.app().id, "LocalMind");
+        // The app id is the keychain service: Local Mind's was `LocalMind`, and the app now hands
+        // the new `LocalMindmap` (the old one is only read by the legacy key migration).
+        let backend = LiveBackend::new("LocalMindmap", "https://github.com/Styx-Studios/Local-Mindmap");
+        assert_eq!(backend.app().id, "LocalMindmap");
         assert_eq!(backend.app().url, "https://github.com/Styx-Studios/Local-Mindmap");
     }
 }

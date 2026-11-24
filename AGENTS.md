@@ -39,7 +39,9 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
   painel), `close.rs` (o guardar-antes-de-fechar: a máquina de estado do close e o modal
   Salvar/Não salvar/Cancelar), `export.rs`
   (Markdown/HTML/SVG), `png.rs` (o PNG pela tesselação do epaint), `theme.rs` (os 7 temas, com o
-  claro craft), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `i18n.rs`,
+  claro craft), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `legacy.rs` (os
+  nomes do "Local Mind": pastas de prefs/dados/cache/portátil e chaves do chaveiro que a migração
+  traz uma vez, sem sobrescrever nem apagar; e as env vars novas com fallback nas antigas), `i18n.rs`,
   `pickers.rs`, `fonts.rs`, `suite_entry.rs`, `build.rs`
 - `crates/localmindmap-ai` — prompts localizados, o extrator JSON tolerante, as 5 ações + o chat, o
   `outline` (o mapa como contexto do chat, com orçamento) e o `Backend` (o seam para a rede; os

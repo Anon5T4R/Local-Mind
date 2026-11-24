@@ -27,9 +27,16 @@ use localmindmap_ai::actions::{self, Request};
 use crate::edit::Editor;
 
 /// The app identity the connections file and the keychain entries belong to.
-pub const AI_APP_ID: &str = "LocalMind";
+pub const AI_APP_ID: &str = "LocalMindmap";
 /// The project URL the OpenRouter headers advertise.
 pub const AI_APP_URL: &str = "https://github.com/Styx-Studios/Local-Mindmap";
+/// The id of the saved connection, which is also its keychain account (`ai-connection-<id>`).
+///
+/// It keeps the spelling the app wrote before the rename on purpose: a connection saved by Local
+/// Mind is filed under `localmind` both in `ai-connections.json` and in the keychain, and the copy
+/// of the keys has to land on the entry the app reads afterwards. What changed is the keychain
+/// *service*, `AI_APP_ID`; the shape of the saved connection did not.
+pub const AI_CONNECTION_ID: &str = "localmind";
 
 /// What a worker thread reports back.
 enum Event {
@@ -678,7 +685,7 @@ fn draft_of(connection: &Connection) -> ai_ui::ConnectionDraft {
 fn connection_of(draft: &ai_ui::ConnectionDraft) -> Connection {
     let label = local_ai::provider(&draft.provider).map(|p| p.label.to_owned()).unwrap_or_else(|| draft.provider.clone());
     Connection {
-        id: AI_APP_ID.to_lowercase(),
+        id: AI_CONNECTION_ID.to_owned(),
         provider: draft.provider.clone(),
         label,
         base_url: draft.base_url.trim().to_string(),

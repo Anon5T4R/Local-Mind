@@ -85,7 +85,9 @@ pub fn path() -> Option<PathBuf> {
     config_dir().map(|dir| dir.join(APP.name).join(FILE))
 }
 
-fn config_dir() -> Option<PathBuf> {
+/// The platform's config base folder (`legacy` joins the app folder to it when it moves the old
+/// preferences over).
+pub(crate) fn config_dir() -> Option<PathBuf> {
     if cfg!(windows) {
         std::env::var_os("APPDATA").map(PathBuf::from)
     } else if cfg!(target_os = "macos") {
