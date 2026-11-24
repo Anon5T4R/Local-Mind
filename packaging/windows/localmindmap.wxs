@@ -225,7 +225,9 @@
             Target="[#LocalMindmapExe]" WorkingDirectory="INSTALLFOLDER" Icon="LocalMindmapIcon.ico" IconIndex="0" />
         <RegistryValue Root="HKLM" Key="Software\Local Mindmap\Shortcuts" Name="Desktop" Type="integer" Value="1" KeyPath="yes" />
       </Component>
-      <Component Id="LocalMindmapNotice">
+      <!-- Este componente não tem Guid explícito: o WiX gera um a partir do Id. Por isso o Id fica com o
+           nome antigo — renomeá-lo mudaria o GUID do componente, que não pode mudar nesta troca de nome. -->
+      <Component Id="LocalMindNotice">
         <File Id="LocalMindmapNoticeFile" Source="$(var.BinDir)\NOTICE" KeyPath="yes" />
       </Component>
       <Component Id="LocalMindmapFontLicences" Guid="E34A35C8-C903-48F2-B462-9E5E98A1321D">

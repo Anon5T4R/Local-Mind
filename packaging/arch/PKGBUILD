@@ -12,8 +12,9 @@ pkgdesc='Mapas mentais da suíte Local, escritos em Rust puro'
 arch=(x86_64)
 url='https://github.com/Styx-Studios/Local-Mindmap'
 license=('MIT OR Apache-2.0')
-# O produto se chamava Local Mind: provides do nome novo e do antigo, e replaces tira o pacote antigo
-# na atualização do sistema (o pkgname com.localmind.app é o mesmo desde o nascimento).
+# O produto se chamava Local Mind. No Arch o nome do pacote nunca mudou (com.localmind.app desde o
+# nascimento), então a atualização do sistema já substitui o antigo; provides do nome novo e do antigo
+# serve a quem referencia um deles, e replaces/conflicts do antigo só espelham o que o deb e o rpm fazem.
 provides=('localmindmap' 'localmind')
 conflicts=('localmindmap' 'localmind')
 replaces=('localmind')
