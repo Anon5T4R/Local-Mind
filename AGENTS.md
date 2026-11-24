@@ -2,7 +2,8 @@
 
 App desktop da suíte Local: **Rust puro + egui forkado**, sem webview/React/TS. Mapas mentais com
 layout equilibrado nas quatro direções; o formato é o `.tmind` do **LocalMind** (Electron), que é a
-spec de comportamento deste port e vive em `C:\Dev\Local\LocalMind` — **somente leitura**.
+spec de comportamento deste port. O código Electron não existe mais na máquina (nem em
+`C:\Dev\legado\Local\`) nem como repo no GitHub; a spec ficou só no histórico do git.
 
 Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-notes).
 
@@ -101,5 +102,5 @@ rodando, as flags vão para o app. As três vias têm teste em `tests/agent_nati
 
 Menções a `storytold/*` em código, comentários, docs e atribuições são referência histórica e
 obrigação de licença. **Nada** é lido de `C:\Dev\storytold` em build, teste ou release. A spec
-funcional deste port é o **LocalMind Electron** em `C:\Dev\Local\LocalMind` — leitura apenas: ele
-não é alterado por este repositório.
+funcional deste port é o **LocalMind Electron**, que não existe mais na máquina (só no histórico do
+git; sem repo no GitHub). Este repositório não o altera.

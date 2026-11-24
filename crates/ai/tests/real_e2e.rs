@@ -2,7 +2,7 @@
 //!
 //! Two paths go out: one action (the map plus the node it is about) and the chat with the map's
 //! outline as the context (what the panel sends). A free model works with the suite's zero-credit
-//! key. The key comes from `OPENROUTER_API_KEY` or from `C:\Users\Hades\Desktop\ai-test.env`
+//! key. The key comes from `OPENROUTER_API_KEY` or from `%USERPROFILE%\Segredos\ai-test.env`
 //! (never printed). Run with
 //! `AI_TEST_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free cargo test -p localmind-ai --test real_e2e -- --ignored --nocapture`.
 
@@ -24,12 +24,12 @@ fn connection() -> Connection {
     }
 }
 
-/// The key: the environment first, then the suite's `ai-test.env` on the Desktop.
+/// The key: the environment first, then the suite's `ai-test.env` in `%USERPROFILE%\Segredos`.
 fn real_key() -> String {
     if let Some(key) = std::env::var("OPENROUTER_API_KEY").ok().filter(|key| !key.trim().is_empty()) {
         return key.trim().to_string();
     }
-    let path = std::path::PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default()).join("Desktop").join("ai-test.env");
+    let path = std::path::PathBuf::from(std::env::var("USERPROFILE").unwrap_or_default()).join("Segredos").join("ai-test.env");
     let text = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("OPENROUTER_API_KEY or {}: {error}", path.display()));
     for line in text.lines() {
         let line = line.trim();
