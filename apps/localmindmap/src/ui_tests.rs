@@ -188,7 +188,7 @@ fn click_badge(harness: &mut Harness<'_, Editor>, id: &str) {
 }
 
 fn shot(harness: &mut Harness<'_, Editor>, name: &str) {
-    if std::env::var_os("LOCALMIND_QA_RENDER").is_none() {
+    if crate::legacy::env_var_os("QA_RENDER").is_none() {
         return;
     }
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-f3");

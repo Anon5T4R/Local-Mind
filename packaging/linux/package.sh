@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build and package Local Mind for Linux (<arch> is x86_64 or aarch64):
+# Build and package Local Mindmap for Linux (<arch> is x86_64 or aarch64):
 #
-#   $DIST/localmind-<version>-linux-<arch>.AppImage         any distro with glibc >= the build host's
-#   $DIST/localmind-<version>-linux-<arch>.AppImage.zsync   delta updates (needs zsyncmake)
-#   $DIST/localmind-<version>-linux-<arch>.deb              Debian, Ubuntu, Mint, Pop!_OS, ...
-#   $DIST/localmind-<version>-linux-<arch>.rpm              Fedora, openSUSE, RHEL, ...
-#   $DIST/localmind-<version>-linux-<arch>.tar.gz           plain FHS-style tree (bin/, share/)
+#   $DIST/localmindmap-<version>-linux-<arch>.AppImage         any distro with glibc >= the build host's
+#   $DIST/localmindmap-<version>-linux-<arch>.AppImage.zsync   delta updates (needs zsyncmake)
+#   $DIST/localmindmap-<version>-linux-<arch>.deb              Debian, Ubuntu, Mint, Pop!_OS, ...
+#   $DIST/localmindmap-<version>-linux-<arch>.rpm              Fedora, openSUSE, RHEL, ...
+#   $DIST/localmindmap-<version>-linux-<arch>.tar.gz           plain FHS-style tree (bin/, share/)
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"]
 # Fonts: uses CRAFT_FONTS_DIR or the vendored assets/craft-fonts.
@@ -37,16 +37,16 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export LOCALMIND_MAINTAINER="${LOCALMIND_MAINTAINER:-Local Mind maintainers <localmind@users.noreply.github.com>}"
-BASENAME="localmind-$VERSION-linux-$ARCH"
+export LOCALMINDMAP_MAINTAINER="${LOCALMINDMAP_MAINTAINER:-${LOCALMIND_MAINTAINER:-Local Mindmap maintainers <localmindmap@users.noreply.github.com>}}"
+BASENAME="localmindmap-$VERSION-linux-$ARCH"
 
-echo "==> Local Mind $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> Local Mindmap $VERSION for Linux $ARCH ($FORMATS)"
 
 if [[ "$SKIP_BUILD" = 0 ]]; then
   # shellcheck source=../fonts.sh
   . "$ROOT/packaging/fonts.sh"
   prepare_fonts
-  (cd "$ROOT" && cargo build --release --locked -p localmind ${CROSS_TARGET:+--target "$CROSS_TARGET"})
+  (cd "$ROOT" && cargo build --release --locked -p localmindmap ${CROSS_TARGET:+--target "$CROSS_TARGET"})
 fi
 BIN="$CARGO_TARGET_DIR/${CROSS_TARGET:+$CROSS_TARGET/}release"
 WORK="$CARGO_TARGET_DIR/linux-package"
@@ -54,17 +54,17 @@ STAGE="$WORK/root"
 rm -rf "$WORK"
 
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
-install -Dm755 "$BIN/localmind" "$STAGE/usr/bin/localmind"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/localmind" 2>/dev/null || true
+install -Dm755 "$BIN/localmindmap" "$STAGE/usr/bin/localmindmap"
+"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/localmindmap" 2>/dev/null || true
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "$HERE/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$LOCALMIND_BUILD_DATE/g" \
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$LOCALMINDMAP_BUILD_DATE/g" \
   "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
-mkdir -p "$STAGE/usr/share/doc/localmind"
-copy_docs "$STAGE/usr/share/doc/localmind"
+mkdir -p "$STAGE/usr/share/doc/localmindmap"
+copy_docs "$STAGE/usr/share/doc/localmindmap"
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"
@@ -114,9 +114,9 @@ if has appimage; then
     aarch64) RUNTIME_SHA256=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444 ;;
     *) RUNTIME_SHA256='' ;;
   esac
-  APPDIR="$WORK/Local Mind.AppDir"
+  APPDIR="$WORK/Local Mindmap.AppDir"
   cp -R "$STAGE" "$APPDIR"
-  ln -s usr/bin/localmind "$APPDIR/AppRun"
+  ln -s usr/bin/localmindmap "$APPDIR/AppRun"
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   cp "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"
@@ -162,8 +162,8 @@ if has appimage; then
   # Update information: AppImageUpdate and AppImageLauncher read it from the file and fetch only
   # the blocks that changed in a newer release, through the .zsync published next to each AppImage
   # on GitHub Releases. A fork's builds point at its own releases through GITHUB_REPOSITORY.
-  REPO="${GITHUB_REPOSITORY:-Anon5T4R/Local-Mind}"
-  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|localmind-*-linux-$ARCH.AppImage.zsync"
+  REPO="${GITHUB_REPOSITORY:-Styx-Studios/Local-Mindmap}"
+  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|localmindmap-*-linux-$ARCH.AppImage.zsync"
   # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
   # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync
   # package) appimagetool also writes the .zsync, into its working directory, hence the cd.
@@ -176,6 +176,6 @@ if has appimage; then
   fi
 fi
 
-"$STAGE/usr/bin/localmind" --version
+"$STAGE/usr/bin/localmindmap" --version
 echo "==> done"
 ls -lh "$DIST"

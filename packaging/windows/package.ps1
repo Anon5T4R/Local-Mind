@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  Build, sign and package Local Mind for Windows.
+  Build, sign and package Local Mindmap for Windows.
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
-    localmind-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    localmind-<version>-windows-<arch>-portable.zip   localmind.exe, the licences and NOTICE
+    localmindmap-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
+    localmindmap-<version>-windows-<arch>-portable.zip   localmindmap.exe, the licences and NOTICE
 
   The binary links the C runtime statically (+crt-static), so neither the MSI nor the portable zip
   needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a warning
@@ -15,7 +15,7 @@
 
   Needs: Rust (MSVC toolchain + the target), the Windows SDK (rc.exe, signtool.exe), and WiX v5:
   dotnet tool install --global wix --version 5.0.2
-  The WiX UI and Util extensions (installer dialogs, "Launch Local Mind" on Finish) are added to the
+  The WiX UI and Util extensions (installer dialogs, "Launch Local Mindmap" on Finish) are added to the
   global WiX extension cache by this script (wix extension add -g ..., needs network once).
 
 .EXAMPLE
@@ -59,7 +59,7 @@ function New-PanelBitmap([string] $Path, [int] $Width, [int] $Height, [int] $Spl
 }
 
 # The version lives in one place: [workspace.package] version in the root Cargo.toml.
-$Version = $env:LOCALMIND_VERSION
+$Version = if ($env:LOCALMINDMAP_VERSION) { $env:LOCALMINDMAP_VERSION } else { $env:LOCALMIND_VERSION }
 if (-not $Version) {
   $inPkg = $false
   foreach ($line in Get-Content (Join-Path $Root 'Cargo.toml')) {
@@ -76,9 +76,11 @@ $Dist = if ($env:DIST) { $env:DIST } else { Join-Path $Root 'dist\release' }
 $TargetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $Root 'target' }
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 
-if (-not $env:LOCALMIND_BUILD_DATE) { $env:LOCALMIND_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
+if (-not $env:LOCALMINDMAP_BUILD_DATE) {
+  $env:LOCALMINDMAP_BUILD_DATE = if ($env:LOCALMIND_BUILD_DATE) { $env:LOCALMIND_BUILD_DATE } else { (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
+}
 
-Write-Output "Local Mind $Version for Windows $Arch ($Target)"
+Write-Output "Local Mindmap $Version for Windows $Arch ($Target)"
 
 if (-not $SkipBuild) {
   . (Join-Path $PSScriptRoot 'fonts.ps1')
@@ -88,8 +90,8 @@ if (-not $SkipBuild) {
   $flagVar = 'CARGO_TARGET_' + ($Target.ToUpper() -replace '-', '_') + '_RUSTFLAGS'
   [Environment]::SetEnvironmentVariable($flagVar, '-C target-feature=+crt-static')
   # Fail the build (rather than warn) if the icon/VERSIONINFO can't be embedded.
-  $env:LOCALMIND_REQUIRE_WINRES = '1'
-  Invoke-Native "cargo build ($Target)" { cargo build --release --locked -p localmind --target $Target }
+  $env:LOCALMINDMAP_REQUIRE_WINRES = '1'
+  Invoke-Native "cargo build ($Target)" { cargo build --release --locked -p localmindmap --target $Target }
 }
 
 $Bin = Join-Path $TargetDir "$Target\release"
@@ -103,22 +105,22 @@ function Get-PeHeader([string] $Path) {
   return @{ Machine = [BitConverter]::ToUInt16($bytes, $pe + 4); Subsystem = [BitConverter]::ToUInt16($bytes, $pe + 0x5C) }
 }
 $Machine = switch ($Arch) { 'x64' { 0x8664 } 'x86' { 0x14C } 'arm64' { 0xAA64 } }
-$h = Get-PeHeader (Join-Path $Bin 'localmind.exe')
-if ($h.Machine -ne $Machine) { throw "localmind.exe is for machine 0x$('{0:X}' -f $h.Machine), expected 0x$('{0:X}' -f $Machine) ($Arch)" }
-if ($h.Subsystem -ne 2) { throw "localmind.exe has PE subsystem $($h.Subsystem), expected 2 (Windows GUI)" }
-Write-Output "ok localmind.exe: $Arch, PE subsystem $($h.Subsystem)"
+$h = Get-PeHeader (Join-Path $Bin 'localmindmap.exe')
+if ($h.Machine -ne $Machine) { throw "localmindmap.exe is for machine 0x$('{0:X}' -f $h.Machine), expected 0x$('{0:X}' -f $Machine) ($Arch)" }
+if ($h.Subsystem -ne 2) { throw "localmindmap.exe has PE subsystem $($h.Subsystem), expected 2 (Windows GUI)" }
+Write-Output "ok localmindmap.exe: $Arch, PE subsystem $($h.Subsystem)"
 
 $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
-Copy-Item (Join-Path $Bin 'localmind.exe') $Stage
+Copy-Item (Join-Path $Bin 'localmindmap.exe') $Stage
 # The bundled egui fonts' notices are required even without optional craft-fonts.
 Copy-Item -LiteralPath (Join-Path $Root 'NOTICE') -Destination $Stage
 # Include the embedded fonts' unmodified OFL texts in both installer and portable releases.
 . (Join-Path $PSScriptRoot 'font-licences.ps1')
 Write-FontLicences (Join-Path $Stage 'FONT-LICENCES.txt') $env:CRAFT_FONTS_DIR
 
-& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'localmind.exe')
+& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'localmindmap.exe')
 
 # ---- MSI ---------------------------------------------------------------------------------------
 # Extensions must match the WiX tool version (5.0.2, see release.yml). Re-adding is harmless.
@@ -136,10 +138,10 @@ $UiBannerBmp = Join-Path $Stage 'ui-banner.bmp'
 New-PanelBitmap $UiDialogBmp 493 312 164 ([byte[]](0x4E, 0x7B, 0xFB)) ([byte[]](0xFF, 0xFF, 0xFF))
 New-PanelBitmap $UiBannerBmp 493 58 0 ([byte[]](0xFF, 0xFF, 0xFF)) ([byte[]](0xFF, 0xFF, 0xFF))
 
-$Msi = Join-Path $Dist "localmind-$Version-windows-$Arch.msi"
+$Msi = Join-Path $Dist "localmindmap-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
-  wix build (Join-Path $PSScriptRoot 'localmind.wxs') -arch $Arch -culture en-us @ExtArgs `
-    -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\localmind.ico')" `
+  wix build (Join-Path $PSScriptRoot 'localmindmap.wxs') -arch $Arch -culture en-us @ExtArgs `
+    -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\localmindmap.ico')" `
     -d "UiDialogBmp=$UiDialogBmp" -d "UiBannerBmp=$UiBannerBmp" `
     -o $Msi
 }
@@ -148,7 +150,7 @@ Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Ms
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\localmind-$Version-windows-$Arch-portable"
+$Portable = Join-Path $TargetDir "windows-package\localmindmap-$Version-windows-$Arch-portable"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
@@ -163,12 +165,12 @@ if ($env:CRAFT_FONTS_DIR) {
     Copy-Item $_.FullName (Join-Path $Portable "OFL-$($_.Directory.Name).txt")
   }
 }
-$Zip = Join-Path $Dist "localmind-$Version-windows-$Arch-portable.zip"
+$Zip = Join-Path $Dist "localmindmap-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 # Compress-Archive (PowerShell 5.1) writes entry names with backslashes; the updater's portable
 # unpack refuses them ("The portable ZIP contains an unsafe path or link."), and a zip with '\' is
 # ambiguous cross-platform besides. Build the archive by hand, every entry with '/', holding the
-# files at the archive root so localmind.exe sits at the top wherever it is extracted.
+# files at the archive root so localmindmap.exe sits at the top wherever it is extracted.
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $PortableFull = [System.IO.Path]::GetFullPath($Portable)
 $ZipStream = [System.IO.File]::Open($Zip, [System.IO.FileMode]::Create)
@@ -188,7 +190,7 @@ try {
 $Check = Join-Path $TargetDir 'windows-package\portable-zip-check'
 Remove-Item -Recurse -Force $Check -ErrorAction SilentlyContinue
 Expand-Archive -Path $Zip -DestinationPath $Check -Force
-if (-not (Test-Path (Join-Path $Check 'localmind.exe'))) { throw "the portable zip has no localmind.exe at its root: $Zip" }
+if (-not (Test-Path (Join-Path $Check 'localmindmap.exe'))) { throw "the portable zip has no localmindmap.exe at its root: $Zip" }
 Remove-Item -Recurse -Force $Check -ErrorAction SilentlyContinue
 
 Get-Item $Msi, $Zip | Format-Table Name, Length

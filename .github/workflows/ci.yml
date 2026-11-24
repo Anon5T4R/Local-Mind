@@ -79,7 +79,7 @@ jobs:
       - name: Testes compilam (Windows)
         if: runner.os == 'Windows'
         env:
-          LOCALMIND_REQUIRE_WINRES: 1
+          LOCALMINDMAP_REQUIRE_WINRES: 1
         run: cargo test --locked --no-run
 
   arch:

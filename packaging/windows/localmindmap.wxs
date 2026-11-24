@@ -1,62 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Local Mind MSI (WiX Toolset v5: `dotnet tool install -g wix`, plus the UI and Util extensions:
+  Local Mindmap MSI (WiX Toolset v5: `dotnet tool install -g wix`, plus the UI and Util extensions:
   `wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2`). Built by package.ps1:
 
-    wix build localmind.wxs -arch x64 -ext WixToolset.UI.wixext/5.0.2 -ext WixToolset.Util.wixext/5.0.2
+    wix build localmindmap.wxs -arch x64 -ext WixToolset.UI.wixext/5.0.2 -ext WixToolset.Util.wixext/5.0.2
       -d Version=1.2.3 -d BinDir=... -d IconPath=... -d UiDialogBmp=... -d UiBannerBmp=... -o out.msi
 
   Per-machine install into Program Files (or the folder chosen in the installer, or
   `INSTALLFOLDER=...` on the msiexec command line; upgrades keep it), a Start Menu shortcut, a
-  desktop shortcut, and the `.tmind` file association (Local Mind is the map format's default app).
+  desktop shortcut, and the `.tmind` file association (Local Mindmap is the map format's default app).
+
+  The product was called Local Mind until it became Local Mindmap. The UpgradeCode and the component
+  GUIDs below did not change with the name, so this MSI upgrades the old one (MajorUpgrade removes
+  the old product first: its ProgId, "Open with" entries, Capabilities, App Paths and shortcuts go
+  with it, and the ones below are written in their place).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-      Name="Local Mind"
-      Manufacturer="Local Mind contributors"
+      Name="Local Mindmap"
+      Manufacturer="Local Mindmap contributors"
       Version="$(var.Version)"
       UpgradeCode="7554E594-D97D-4605-8AB2-4A620FD14FE1"
       Scope="perMachine"
       Compressed="yes"
       Language="1033">
-    <SummaryInformation Description="Local Mind - mind maps with a balanced layout" Manufacturer="Local Mind contributors" />
+    <SummaryInformation Description="Local Mindmap - mind maps with a balanced layout" Manufacturer="Local Mindmap contributors" />
     <!-- Same-version upgrades let successive pre-releases of one X.Y.Z replace each other
          (MSI versions are numeric, so 1.2.3-rc.1 and 1.2.3-rc.2 are both 1.2.3). -->
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-        DowngradeErrorMessage="A newer version of Local Mind is already installed." />
+        DowngradeErrorMessage="A newer version of Local Mindmap is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <Icon Id="LocalMindIcon.ico" SourceFile="$(var.IconPath)" />
-    <Property Id="ARPPRODUCTICON" Value="LocalMindIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Anon5T4R/Local-Mind" />
-    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Anon5T4R/Local-Mind" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/Anon5T4R/Local-Mind/issues" />
+    <Icon Id="LocalMindmapIcon.ico" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="LocalMindmapIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Styx-Studios/Local-Mindmap" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/Styx-Studios/Local-Mindmap" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Styx-Studios/Local-Mindmap/issues" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="Local Mind" />
+      <Directory Id="INSTALLFOLDER" Name="Local Mindmap" />
     </StandardDirectory>
     <!-- The folder of the installed version (written by the app's own key below), so an upgrade
          installs where the user chose instead of moving back to Program Files. Searched into its
          own property: AppSearch would otherwise overwrite INSTALLFOLDER=... given to msiexec. -->
     <Property Id="PREVIOUSINSTALLFOLDER">
-      <RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\Local Mind" Name="InstallFolder" Type="raw" />
+      <!-- Searches run in order and a later hit replaces an earlier one: the key of the product's
+           old name (Local Mind) first, so an upgrade from it still finds the folder, then the
+           current key, which wins when both exist. -->
+      <RegistrySearch Id="PreviousInstallFolderOldName" Root="HKLM" Key="Software\Local Mind" Name="InstallFolder" Type="raw" />
+      <RegistrySearch Id="PreviousInstallFolder" Root="HKLM" Key="Software\Local Mindmap" Name="InstallFolder" Type="raw" />
     </Property>
     <SetProperty Id="INSTALLFOLDER" Value="[PREVIOUSINSTALLFOLDER]" After="AppSearch" Sequence="both"
         Condition="PREVIOUSINSTALLFOLDER AND NOT INSTALLFOLDER" />
     <StandardDirectory Id="ProgramMenuFolder" />
     <StandardDirectory Id="DesktopFolder" />
 
-    <Feature Id="Main" Title="Local Mind" Level="1">
-      <ComponentGroupRef Id="LocalMindFiles" />
+    <Feature Id="Main" Title="Local Mindmap" Level="1">
+      <ComponentGroupRef Id="LocalMindmapFiles" />
     </Feature>
 
-    <UIRef Id="LocalMindUI" />
+    <UIRef Id="LocalMindmapUI" />
   </Package>
 
   <!--
     Interactive install UI: Welcome -> Destination Folder -> Ready to install -> progress ->
-    "Completed" (Finish), with a "Launch Local Mind" checkbox (checked by default). Destination
-    Folder shows Program Files\Local Mind, or the installed version's folder on an upgrade;
+    "Completed" (Finish), with a "Launch Local Mindmap" checkbox (checked by default). Destination
+    Folder shows Program Files\Local Mindmap, or the installed version's folder on an upgrade;
     Change... browses, and a folder that can't be used (InvalidDirDlg) is refused before anything
     is installed. Failure and cancellation end on WiX's standard FatalError / UserExit dialogs
     instead of the completion page. Maintenance (running the MSI again, Repair/Remove from Apps)
@@ -77,20 +86,20 @@
     <WixVariable Id="WixUIBannerBmp" Value="$(var.UiBannerBmp)" />
 
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
-        Value="Local Mind has been installed. You can start it at any time from the Start menu." />
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Local Mind" />
+        Value="Local Mindmap has been installed. You can start it at any time from the Start menu." />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Local Mindmap" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
 
-    <!-- "Launch Local Mind" on Finish. WixUnelevatedShellExec (Util extension) asks the desktop shell
+    <!-- "Launch Local Mindmap" on Finish. WixUnelevatedShellExec (Util extension) asks the desktop shell
          (Explorer) to start the program, so it runs as the signed-in user at normal integrity even
          when the installer UI itself is elevated; it never runs from the elevated/SYSTEM server
          side. It is a UI-only control event, so silent and passive installs never run it.
          Return="ignore": a failed launch must not turn a successful install into an error. -->
-    <Property Id="WixUnelevatedShellExecTarget" Value="[#LocalMindExe]" />
-    <CustomAction Id="LaunchLocalMind" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+    <Property Id="WixUnelevatedShellExecTarget" Value="[#LocalMindmapExe]" />
+    <CustomAction Id="LaunchLocalMindmap" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
         DllEntry="WixUnelevatedShellExec" Execute="immediate" Impersonate="yes" Return="ignore" />
 
-    <UI Id="LocalMindUI">
+    <UI Id="LocalMindmapUI">
       <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
       <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
       <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
@@ -158,7 +167,7 @@
           Condition="Installed AND NOT PATCH" />
 
       <!-- Completion page: optionally launch, then close. -->
-      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchLocalMind" Order="1"
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchLocalMindmap" Order="1"
           Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
 
@@ -170,56 +179,57 @@
   </Fragment>
 
   <Fragment>
-    <ComponentGroup Id="LocalMindFiles" Directory="INSTALLFOLDER">
-      <Component Id="LocalMindApp" Guid="9E53EE97-7A3C-4ABA-8A65-7D9C159BB5D0">
-        <File Id="LocalMindExe" Source="$(var.BinDir)\localmind.exe" KeyPath="yes">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Local Mind"
-              Description="Local Mind - mind maps with a balanced layout" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
-              Icon="LocalMindIcon.ico" IconIndex="0" />
+    <ComponentGroup Id="LocalMindmapFiles" Directory="INSTALLFOLDER">
+      <Component Id="LocalMindmapApp" Guid="9E53EE97-7A3C-4ABA-8A65-7D9C159BB5D0">
+        <File Id="LocalMindmapExe" Source="$(var.BinDir)\localmindmap.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Local Mindmap"
+              Description="Local Mindmap - mind maps with a balanced layout" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
+              Icon="LocalMindmapIcon.ico" IconIndex="0" />
         </File>
 
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\localmind.exe" Value="[#LocalMindExe]" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Local Mind" Name="InstallFolder" Value="[INSTALLFOLDER]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\localmindmap.exe" Value="[#LocalMindmapExe]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Local Mindmap" Name="InstallFolder" Value="[INSTALLFOLDER]" Type="string" />
         <!-- Suite convention (craft-update's `install_dir`): `InstallDir` under the app's own key. -->
-        <RegistryValue Root="HKLM" Key="Software\Local Mind" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Anon5T4R\LocalMind" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Local Mindmap" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Anon5T4R\LocalMindmap" Name="InstallDir" Value="[INSTALLFOLDER]" Type="string" />
 
         <!-- .tmind: the map format the original LocalMind wrote; this app is its default handler, so
              a double click on a user's existing map opens here. `Icon` on a ProgId names a File (the
-             executable carries the icon), never the Icon table. -->
-        <ProgId Id="LocalMind.Document" Description="Local Mind Map" Icon="LocalMindExe" IconIndex="0">
+             executable carries the icon), never the Icon table. The old product's ProgId
+             (LocalMind.Document) is removed with it on upgrade; nothing here depends on it. -->
+        <ProgId Id="LocalMindmap.Document" Description="Mind Map Document" Icon="LocalMindmapExe" IconIndex="0">
           <Extension Id="tmind" ContentType="application/x-localmind">
-            <Verb Id="open" Command="Open" TargetFile="LocalMindExe" Argument="&quot;%1&quot;" />
+            <Verb Id="open" Command="Open" TargetFile="LocalMindmapExe" Argument="&quot;%1&quot;" />
           </Extension>
         </ProgId>
 
         <!-- "Open with" and Settings > Default apps, through the Default Programs registration: OpenWithProgids,
              Capabilities and RegisteredApplications. The ProgId above already makes the app the handler
              of its own .tmind; this lists it the same way as the suite's other apps. -->
-        <RegistryValue Root="HKLM" Key="Software\Classes\.tmind\OpenWithProgids" Name="LocalMind.Document" Value="" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe" Name="FriendlyAppName" Value="Local Mind" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe\shell\open\command" Value="&quot;[#LocalMindExe]&quot; &quot;%1&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmind.exe\SupportedTypes" Name=".tmind" Value="" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationName" Value="Local Mind" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationDescription" Value="Mind maps with a balanced layout" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities" Name="ApplicationIcon" Value="[#LocalMindExe],0" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\LocalMind\Capabilities\FileAssociations" Name=".tmind" Value="LocalMind.Document" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="LocalMind" Value="Software\LocalMind\Capabilities" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.tmind\OpenWithProgids" Name="LocalMindmap.Document" Value="" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmindmap.exe" Name="FriendlyAppName" Value="Local Mindmap" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmindmap.exe\shell\open\command" Value="&quot;[#LocalMindmapExe]&quot; &quot;%1&quot;" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Applications\localmindmap.exe\SupportedTypes" Name=".tmind" Value="" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMindmap\Capabilities" Name="ApplicationName" Value="Local Mindmap" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMindmap\Capabilities" Name="ApplicationDescription" Value="Mind maps with a balanced layout" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMindmap\Capabilities" Name="ApplicationIcon" Value="[#LocalMindmapExe],0" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LocalMindmap\Capabilities\FileAssociations" Name=".tmind" Value="LocalMindmap.Document" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="LocalMindmap" Value="Software\LocalMindmap\Capabilities" Type="string" />
       </Component>
 
       <!-- Desktop shortcut, the suite's standard: a plain shortcut (not advertised, so it works
            from the desktop without fetching the MSI on first launch) with its own component and
            registry key path, so an uninstall removes it. -->
-      <Component Id="LocalMindDesktopShortcut" Directory="DesktopFolder" Guid="266E993D-479D-4593-AA46-3A090154D5FD">
-        <Shortcut Id="DesktopShortcut" Name="Local Mind" Description="Local Mind - mind maps with a balanced layout"
-            Target="[#LocalMindExe]" WorkingDirectory="INSTALLFOLDER" Icon="LocalMindIcon.ico" IconIndex="0" />
-        <RegistryValue Root="HKLM" Key="Software\Local Mind\Shortcuts" Name="Desktop" Type="integer" Value="1" KeyPath="yes" />
+      <Component Id="LocalMindmapDesktopShortcut" Directory="DesktopFolder" Guid="266E993D-479D-4593-AA46-3A090154D5FD">
+        <Shortcut Id="DesktopShortcut" Name="Local Mindmap" Description="Local Mindmap - mind maps with a balanced layout"
+            Target="[#LocalMindmapExe]" WorkingDirectory="INSTALLFOLDER" Icon="LocalMindmapIcon.ico" IconIndex="0" />
+        <RegistryValue Root="HKLM" Key="Software\Local Mindmap\Shortcuts" Name="Desktop" Type="integer" Value="1" KeyPath="yes" />
       </Component>
-      <Component Id="LocalMindNotice">
-        <File Id="LocalMindNoticeFile" Source="$(var.BinDir)\NOTICE" KeyPath="yes" />
+      <Component Id="LocalMindmapNotice">
+        <File Id="LocalMindmapNoticeFile" Source="$(var.BinDir)\NOTICE" KeyPath="yes" />
       </Component>
-      <Component Id="LocalMindFontLicences" Guid="E34A35C8-C903-48F2-B462-9E5E98A1321D">
-        <File Id="LocalMindFontLicencesFile" Source="$(var.BinDir)\FONT-LICENCES.txt" KeyPath="yes" />
+      <Component Id="LocalMindmapFontLicences" Guid="E34A35C8-C903-48F2-B462-9E5E98A1321D">
+        <File Id="LocalMindmapFontLicencesFile" Source="$(var.BinDir)\FONT-LICENCES.txt" KeyPath="yes" />
       </Component>
     </ComponentGroup>
   </Fragment>

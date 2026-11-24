@@ -3,9 +3,9 @@
 #
 # Exports:
 #   ROOT                  workspace root
-#   VERSION               [workspace.package] version from Cargo.toml (override: LOCALMIND_VERSION)
+#   VERSION               [workspace.package] version from Cargo.toml (override: LOCALMINDMAP_VERSION; the old LOCALMIND_VERSION still works)
 #   DIST                  output directory for release artifacts (default: $ROOT/dist/release)
-#   LOCALMIND_BUILD_DATE   UTC build date, YYYY-MM-DD
+#   LOCALMINDMAP_BUILD_DATE   UTC build date, YYYY-MM-DD (the old LOCALMIND_BUILD_DATE still works)
 #   CARGO_TARGET_DIR      cargo's target dir (default: $ROOT/target)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,7 +21,7 @@ workspace_version() {
   return $?
 }
 
-VERSION="${LOCALMIND_VERSION:-$(workspace_version)}"
+VERSION="${LOCALMINDMAP_VERSION:-${LOCALMIND_VERSION:-$(workspace_version)}}"
 if [[ -z "$VERSION" ]]; then
   echo "error: could not read [workspace.package] version from $ROOT/Cargo.toml" >&2
   exit 1
@@ -32,7 +32,7 @@ DIST="${DIST:-$ROOT/dist/release}"
 mkdir -p "$DIST"
 export DIST
 
-export LOCALMIND_BUILD_DATE="${LOCALMIND_BUILD_DATE:-$(date -u +%Y-%m-%d)}"
+export LOCALMINDMAP_BUILD_DATE="${LOCALMINDMAP_BUILD_DATE:-${LOCALMIND_BUILD_DATE:-$(date -u +%Y-%m-%d)}}"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
 
 # Emit a GitHub Actions warning (plain stderr outside Actions).

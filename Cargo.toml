@@ -68,7 +68,7 @@ egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 rfd = "0.17"
 pollster = "1"
 # Headless UI tests: the canvas renders and answers a click without a window. `wgpu` is only needed
-# by the QA render (`LOCALMIND_QA_RENDER=1`), and it is already in the graph through eframe.
+# by the QA render (`LOCALMINDMAP_QA_RENDER=1`), and it is already in the graph through eframe.
 egui_kittest = { version = "0.37", default-features = false, features = ["wgpu"] }
 
 [workspace.lints.rust]

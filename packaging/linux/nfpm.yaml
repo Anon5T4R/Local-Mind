@@ -3,7 +3,7 @@
 # VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: localmind
+name: localmindmap
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -12,9 +12,16 @@ version_schema: semver
 release: 1
 section: utils
 priority: optional
-maintainer: ${LOCALMIND_MAINTAINER}
-vendor: Local Mind contributors
-homepage: https://github.com/Anon5T4R/Local-Mind
+maintainer: ${LOCALMINDMAP_MAINTAINER}
+vendor: Local Mindmap contributors
+# The product was called Local Mind (package `localmind`): this one takes its place on upgrade.
+replaces:
+  - localmind
+conflicts:
+  - localmind
+provides:
+  - localmind
+homepage: https://github.com/Styx-Studios/Local-Mindmap
 license: MIT OR Apache-2.0
 description: |-
   Mind maps with a balanced layout: a central idea with branches that fan out
@@ -58,8 +65,8 @@ overrides:
       - xdg-desktop-portal
 
 contents:
-  - src: ${STAGE}/usr/bin/localmind
-    dst: /usr/bin/localmind
+  - src: ${STAGE}/usr/bin/localmindmap
+    dst: /usr/bin/localmindmap
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/

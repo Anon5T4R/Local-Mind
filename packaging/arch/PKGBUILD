@@ -1,4 +1,4 @@
-# PKGBUILD do Local Mind para Arch (uso pessoal do João; não publicado no AUR).
+# PKGBUILD do Local Mindmap para Arch (uso pessoal do João; não publicado no AUR).
 # Instala a árvore FHS (bin/ + share/) do tarball da release - o mesmo artefato
 # que o package.sh gera. O sha256 fica SKIP no repo (o hash só existe após a
 # release); o job arch do CI substitui pelo real ao construir o pacote.
@@ -10,19 +10,22 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='Mapas mentais da suíte Local, escritos em Rust puro'
 arch=(x86_64)
-url='https://github.com/Anon5T4R/Local-Mind'
+url='https://github.com/Styx-Studios/Local-Mindmap'
 license=('MIT OR Apache-2.0')
-provides=('localmind')
-conflicts=('localmind')
+# O produto se chamava Local Mind: provides do nome novo e do antigo, e replaces tira o pacote antigo
+# na atualização do sistema (o pkgname com.localmind.app é o mesmo desde o nascimento).
+provides=('localmindmap' 'localmind')
+conflicts=('localmindmap' 'localmind')
+replaces=('localmind')
 depends=(glibc gcc-libs libxcb libxrandr libxi libxcursor libxkbcommon)
 optdepends=('xdg-desktop-portal: seletor nativo de arquivos (GNOME/KDE já trazem)')
 options=(!debug)
-source=("localmind-$pkgver-linux-x86_64.tar.gz")
+source=("localmindmap-$pkgver-linux-x86_64.tar.gz")
 sha256sums=('SKIP')
 
 package() {
   cd "$srcdir"
   install -dm755 "$pkgdir/usr"
-  cp -a "localmind-$pkgver-linux-x86_64/bin" "$pkgdir/usr/"
-  cp -a "localmind-$pkgver-linux-x86_64/share" "$pkgdir/usr/"
+  cp -a "localmindmap-$pkgver-linux-x86_64/bin" "$pkgdir/usr/"
+  cp -a "localmindmap-$pkgver-linux-x86_64/share" "$pkgdir/usr/"
 }

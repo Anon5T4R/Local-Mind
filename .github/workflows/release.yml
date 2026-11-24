@@ -99,19 +99,19 @@ jobs:
           version=$(grep -m1 '^version = ' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
           work=$(mktemp -d)
           cp packaging/arch/PKGBUILD "$work/"
-          cp "dist/release/localmind-$version-linux-x86_64.tar.gz" "$work/localmind-$version-linux-x86_64.tar.gz"
+          cp "dist/release/localmindmap-$version-linux-x86_64.tar.gz" "$work/localmindmap-$version-linux-x86_64.tar.gz"
           # Fonte local (a URL da release ainda não existe neste ponto do pipeline) + checksum REAL
           # do artefato em vez de SKIP; o pkgver é carimbado do Cargo.toml (PKGBUILD esquecido no
           # bump já derrubou release duas vezes).
-          sha=$(sha256sum "$work/localmind-$version-linux-x86_64.tar.gz" | cut -d' ' -f1)
-          sed -i "s|^pkgver=.*|pkgver=$version|; s|^source=.*|source=(\"localmind-\$pkgver-linux-x86_64.tar.gz\")|; s|^sha256sums=.*|sha256sums=('$sha')|" "$work/PKGBUILD"
+          sha=$(sha256sum "$work/localmindmap-$version-linux-x86_64.tar.gz" | cut -d' ' -f1)
+          sed -i "s|^pkgver=.*|pkgver=$version|; s|^source=.*|source=(\"localmindmap-\$pkgver-linux-x86_64.tar.gz\")|; s|^sha256sums=.*|sha256sums=('$sha')|" "$work/PKGBUILD"
           chown -R builder "$work"
           cd "$work"
           su builder -c 'makepkg --noconfirm --noprogressbar -d'
           # Asset no padrao da suite (<id>-<ver>-linux-<arch>): o pacman instala pelo .PKGINFO
           # interno (pkgname=com.localmind.app), o nome do arquivo e so o contrato do updater.
-          mv com.localmind.app-$version-*.pkg.tar.zst "localmind-$version-linux-x86_64.pkg.tar.zst"
-          mv "localmind-$version-linux-x86_64.pkg.tar.zst" "$GITHUB_WORKSPACE/"
+          mv com.localmind.app-$version-*.pkg.tar.zst "localmindmap-$version-linux-x86_64.pkg.tar.zst"
+          mv "localmindmap-$version-linux-x86_64.pkg.tar.zst" "$GITHUB_WORKSPACE/"
           ls -lh "$GITHUB_WORKSPACE"/*.pkg.tar.zst
       - uses: actions/upload-artifact@v7
         with:
@@ -178,7 +178,7 @@ jobs:
             gh release upload "$tag" "${files[@]}" --clobber
           else
             gh release create "$tag" "${files[@]}" \
-              --title "Local Mind ${tag}" --generate-notes
+              --title "Local Mindmap ${tag}" --generate-notes
           fi
         env:
           GH_TOKEN: ${{ github.token }}

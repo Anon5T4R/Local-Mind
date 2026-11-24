@@ -63,7 +63,7 @@ fn frames() -> [(&'static str, craft_window::Frame); 2] {
 }
 
 fn shot(harness: &mut Harness<'_, LocalApp>, name: &str) {
-    if std::env::var_os("LOCALMIND_QA_RENDER").is_none() {
+    if crate::legacy::env_var_os("QA_RENDER").is_none() {
         return;
     }
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-guardas");

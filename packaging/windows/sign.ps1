@@ -15,7 +15,7 @@
   timestamp server, ...). Optional overrides: WINDOWS_TIMESTAMP_URL, SIGNTOOL (path to signtool.exe).
 
 .EXAMPLE
-  pwsh packaging/windows/sign.ps1 dist/localmind.exe dist/localmind-1.0.0-windows-x64.msi
+  pwsh packaging/windows/sign.ps1 dist/localmindmap.exe dist/localmindmap-1.0.0-windows-x64.msi
 #>
 param(
   [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)]
@@ -55,8 +55,8 @@ if (-not $haveCert -and -not $haveAzure) {
 }
 
 $script:SignTool = Find-SignTool
-$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'Local Mind', '/du', 'https://github.com/Anon5T4R/Local-Mind')
-$tmp = Join-Path ([IO.Path]::GetTempPath()) "localmind-sign-$([IO.Path]::GetRandomFileName())"
+$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'Local Mindmap', '/du', 'https://github.com/Styx-Studios/Local-Mindmap')
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "localmindmap-sign-$([IO.Path]::GetRandomFileName())"
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
 try {

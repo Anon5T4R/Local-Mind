@@ -132,8 +132,8 @@ mod tests {
     /// The live backend exists and carries the app identity (no request is made here).
     #[test]
     fn the_live_backend_carries_the_app_identity() {
-        let backend = LiveBackend::new("LocalMind", "https://github.com/Anon5T4R/Local-Mind");
+        let backend = LiveBackend::new("LocalMind", "https://github.com/Styx-Studios/Local-Mindmap");
         assert_eq!(backend.app().id, "LocalMind");
-        assert_eq!(backend.app().url, "https://github.com/Anon5T4R/Local-Mind");
+        assert_eq!(backend.app().url, "https://github.com/Styx-Studios/Local-Mindmap");
     }
 }

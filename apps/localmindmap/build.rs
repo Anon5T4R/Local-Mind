@@ -3,7 +3,7 @@
 //! 1. **Windows resources** (icon + VERSIONINFO), so Explorer, the taskbar, the Start menu and
 //!    Alt-Tab show the app icon and the installer can read the version. No-op off Windows. A
 //!    missing resource compiler is a warning, so a cross-compile still links, unless
-//!    `LOCALMIND_REQUIRE_WINRES=1` turns it into an error (release builds).
+//!    `LOCALMINDMAP_REQUIRE_WINRES=1` turns it into an error (release builds).
 //! 2. **`craft_i18n.rs`**: `CRAFT_I18N`, the (locale, shared catalog, app catalog) list
 //!    `craft-i18n` reads. From `CRAFT_I18N_DIR` (the in-repo `i18n/` by default).
 //!    `CRAFT_I18N_REQUIRED=1` (releases) makes a missing catalog set an error.
@@ -39,6 +39,13 @@ fn env_flag(name: &str) -> bool {
     std::env::var(name).is_ok_and(|v| v.trim() == "1")
 }
 
+/// An environment variable of this app: `LOCALMINDMAP_<name>`, or the old `LOCALMIND_<name>`
+/// (still accepted), the same pair `legacy::env_var_os` reads at runtime; a build script does not
+/// link the app, so it cannot call it.
+fn app_var(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(format!("LOCALMINDMAP_{name}")).or_else(|| std::env::var_os(format!("LOCALMIND_{name}")))
+}
+
 /// The workspace root (the app crate lives in `<root>/apps/<id>`): where a relative build input is
 /// resolved from, so `CRAFT_FONTS_DIR=assets/craft-fonts` means the same everywhere.
 fn workspace_root() -> PathBuf {
@@ -54,6 +61,7 @@ fn absolute(dir: PathBuf) -> PathBuf {
 
 fn windows_resources() {
     println!("cargo:rerun-if-changed=../../assets/app-icon/localmindmap.ico");
+    println!("cargo:rerun-if-env-changed=LOCALMINDMAP_REQUIRE_WINRES");
     println!("cargo:rerun-if-env-changed=LOCALMIND_REQUIRE_WINRES");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
@@ -66,7 +74,7 @@ fn windows_resources() {
         .set("OriginalFilename", "localmindmap.exe")
         .set("InternalName", "localmindmap");
     if let Err(e) = res.compile() {
-        if std::env::var_os("LOCALMIND_REQUIRE_WINRES").is_some() {
+        if app_var("REQUIRE_WINRES").is_some() {
             panic!("embedding Windows resources failed: {e}");
         }
         println!("cargo:warning=localmindmap.exe built without icon/version resources: {e}");

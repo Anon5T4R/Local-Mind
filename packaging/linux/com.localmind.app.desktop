@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Local Mind
+Name=Local Mindmap
 GenericName=Mind Map
 Comment=Mind maps with a balanced layout
-Exec=localmind %F
+Exec=localmindmap %F
 MimeType=application/x-localmind;
 Icon=com.localmind.app
 Terminal=false

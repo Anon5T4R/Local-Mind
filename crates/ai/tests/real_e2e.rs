@@ -11,7 +11,7 @@ use localmindmap_ai::actions::{self, Request};
 use localmindmap_model::MindMap;
 
 fn app() -> App {
-    App { id: "LocalMind", url: "https://github.com/Anon5T4R/Local-Mind" }
+    App { id: "LocalMind", url: "https://github.com/Styx-Studios/Local-Mindmap" }
 }
 
 fn connection() -> Connection {

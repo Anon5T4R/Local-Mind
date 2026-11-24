@@ -29,7 +29,7 @@ use crate::edit::Editor;
 /// The app identity the connections file and the keychain entries belong to.
 pub const AI_APP_ID: &str = "LocalMind";
 /// The project URL the OpenRouter headers advertise.
-pub const AI_APP_URL: &str = "https://github.com/Anon5T4R/Local-Mind";
+pub const AI_APP_URL: &str = "https://github.com/Styx-Studios/Local-Mindmap";
 
 /// What a worker thread reports back.
 enum Event {

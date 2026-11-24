@@ -12,7 +12,7 @@ use std::net::{TcpListener, TcpStream};
 use local_ai::{App, Connection, Msg};
 
 fn app() -> App {
-    App { id: "LocalMindE2E", url: "https://example.invalid" }
+    App { id: "LocalMindmapE2E", url: "https://example.invalid" }
 }
 
 fn connection(port: u16) -> Connection {

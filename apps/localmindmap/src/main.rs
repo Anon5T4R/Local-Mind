@@ -20,6 +20,7 @@ mod edit;
 mod export;
 mod fonts;
 mod i18n;
+mod legacy;
 mod live;
 mod pickers;
 mod png;
@@ -59,7 +60,7 @@ FILE is a .tmind map to open; the same format the original LocalMind (Electron) 
 you already have open as they are.
 
 The interface language follows the system's; the About window (Help menu) lets you pick another
-one and checks for updates. Updates install from the GitHub releases of Anon5T4R/Local-Mind.
+one and checks for updates. Updates install from the GitHub releases of Styx-Studios/Local-Mindmap.
 
 SCRIPTS AND AI AGENTS:
   localmindmap commands [--search TEXT]     every command as JSON (the palette's ids)
@@ -135,8 +136,14 @@ fn main() -> eframe::Result {
 
     // Who draws the window frame: this is the suite's one decision (the desktop on Windows, macOS
     // and X11; on Wayland, the compositor when it offers server-side decorations, the app on GNOME's
-    // Mutter). `LOCALMIND_TITLEBAR=app|system` overrides it.
-    let choice = craft_window::Choice::probe(craft_window::Prefix::new("LOCALMIND"));
+    // Mutter). `LOCALMINDMAP_TITLEBAR=app|system` overrides it.
+    // The old `LOCALMIND_TITLEBAR` still works when the new variable isn't set.
+    let prefix = if std::env::var_os("LOCALMINDMAP_TITLEBAR").is_none() && legacy::env_var_os("TITLEBAR").is_some() {
+        craft_window::Prefix::new("LOCALMIND")
+    } else {
+        craft_window::Prefix::new("LOCALMINDMAP")
+    };
+    let choice = craft_window::Choice::probe(prefix);
     let viewport = craft_window::decorate(
         egui::ViewportBuilder::default().with_title(APP.name).with_min_inner_size([900.0, 600.0]).with_icon(app_icon()).with_app_id(APP_ID),
         choice.frame(),

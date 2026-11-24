@@ -270,7 +270,7 @@ mod tests {
         for theme in [crate::theme::Theme::Dark, crate::theme::Theme::Light] {
             let png = render(&fixture, &theme.colors()).expect("render");
             assert_eq!(&png[..8], &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
-            if std::env::var_os("LOCALMIND_QA_RENDER").is_none() {
+            if crate::legacy::env_var_os("QA_RENDER").is_none() {
                 continue;
             }
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/qa-f3");
