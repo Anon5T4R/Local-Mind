@@ -7,8 +7,10 @@
 //! * [`migrate_all`] moves each old-named folder (preferences, the AI connections, the updater's
 //!   data and cache, the portable data folder) to its new name, once. It never overwrites: when the
 //!   new folder exists the old one is left alone, and when the move has to be a copy (another
-//!   volume, a file still open) the old folder stays as it was. Every move is logged. The API keys
-//!   in the OS keychain are copied to the new service name, and the old entries are kept.
+//!   volume, a file still open) the old folder stays as it was. A failure is logged and printed
+//!   ([`report`]), because the app keeps no log file and a silent `warn` would reach nobody. The
+//!   API keys in the OS keychain are copied to the new service name **once**, marked with a file,
+//!   and the old entries are kept.
 //! * [`env_var_os`] reads `LOCALMINDMAP_<NAME>` and falls back to the old `LOCALMIND_<NAME>`.
 //!
 //! The maps are not touched: a `.tmind` file belongs to the user and keeps its format.
@@ -40,6 +42,9 @@ const NAMES: [(&str, &str); 4] =
 /// How deep [`copy_tree`] follows folders: settings are a few levels deep at most.
 const MAX_DEPTH: u32 = 16;
 
+/// The file in the preferences folder that says the keychain keys were copied already.
+const KEYS_MARKER: &str = "legacy-keys-copied";
+
 /// What [`migrate_dir`] did.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -51,6 +56,14 @@ pub enum Outcome {
     Copied,
     /// Neither worked; the old folder is untouched and the next start tries again.
     Failed(String),
+}
+
+/// A failure the user may have to act on: logged (for a build that installs a logger) and printed,
+/// the way `main.rs` reports its own errors. Without the print, a folder that could not be moved
+/// would leave the user with the defaults and no word about it.
+fn report(message: std::fmt::Arguments<'_>) {
+    log::warn!("{message}");
+    eprintln!("{}: {message}", APP.id);
 }
 
 /// The variables [`env_var_os`] looks at for `name`, the current one first.
@@ -85,27 +98,40 @@ pub fn migrate_from_old_name(new: &Path) -> Outcome {
 /// volume; otherwise the contents are copied to a staging folder beside `new` that is renamed into
 /// place when complete, so `new` never exists half-copied. Nothing at `new` is ever replaced.
 pub fn migrate_dir(old: &Path, new: &Path) -> Outcome {
+    migrate_dir_with(old, new, rename_path)
+}
+
+/// The real rename, as a plain function: [`std::fs::rename`] is generic over `AsRef<Path>` and does
+/// not satisfy the higher-ranked closure the copy path is tested with.
+fn rename_path(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::rename(from, to)
+}
+
+/// [`migrate_dir`] with the rename passed in, so both the copy path (another volume, a file held
+/// open) and the race that ends in [`Outcome::Nothing`] can be tested.
+fn migrate_dir_with(old: &Path, new: &Path, rename: impl Fn(&Path, &Path) -> std::io::Result<()>) -> Outcome {
     if !old.is_dir() || std::fs::symlink_metadata(new).is_ok() {
         return Outcome::Nothing;
     }
     if let Some(parent) = new.parent()
         && let Err(e) = std::fs::create_dir_all(parent)
     {
-        log::warn!("couldn't move {} to {}: {e}", old.display(), new.display());
+        report(format_args!("couldn't move {} to {}: {e}", old.display(), new.display()));
         return Outcome::Failed(e.to_string());
     }
-    if std::fs::rename(old, new).is_ok() {
+    if rename(old, new).is_ok() {
         log::info!("moved the Local Mind folder {} to {}", old.display(), new.display());
         return Outcome::Moved;
     }
-    let name = new.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let stage = new.with_file_name(format!(".{name}.migrating-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&stage);
+    // A copy interrupted last time left its staging folder behind: this migration's own leftovers
+    // go before the new copy starts.
+    clear_stale_stages(new);
+    let stage = stage_of(new);
     let copied = copy_tree(old, &stage, 0).and_then(|()| {
         if std::fs::symlink_metadata(new).is_ok() {
             Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "the new folder appeared meanwhile"))
         } else {
-            std::fs::rename(&stage, new)
+            rename(&stage, new)
         }
     });
     match copied {
@@ -118,8 +144,37 @@ pub fn migrate_dir(old: &Path, new: &Path) -> Outcome {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
                 return Outcome::Nothing;
             }
-            log::warn!("couldn't copy {} to {}: {e}; the old settings stay where they are", old.display(), new.display());
+            report(format_args!("couldn't copy {} to {}: {e}; the old settings stay where they are", old.display(), new.display()));
             Outcome::Failed(e.to_string())
+        }
+    }
+}
+
+/// Where a copy lands before being renamed into place: beside `new`, named after it and this
+/// process, so two instances never write the same staging folder.
+fn stage_of(new: &Path) -> PathBuf {
+    let name = new.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    new.with_file_name(format!(".{name}.migrating-{}", std::process::id()))
+}
+
+/// Removes the staging folders an interrupted copy left beside `new`: same parent, same name, the
+/// `.{name}.migrating-<pid>` shape [`stage_of`] writes, and nothing else — a file, a folder with a
+/// name that only looks similar, or the staging of another destination is left alone. Another
+/// instance copying this same folder right now would be interrupted; its copy is logged as failed
+/// and tried again next start.
+fn clear_stale_stages(new: &Path) {
+    let (Some(parent), Some(name)) = (new.parent(), new.file_name().and_then(|n| n.to_str())) else { return };
+    let prefix = format!(".{name}.migrating-");
+    let Ok(entries) = std::fs::read_dir(parent) else { return };
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else { continue };
+        let Some(pid) = file_name.strip_prefix(&prefix) else { continue };
+        if pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            let _ = std::fs::remove_dir_all(entry.path());
         }
     }
 }
@@ -141,29 +196,31 @@ fn copy_tree(from: &Path, to: &Path, depth: u32) -> std::io::Result<()> {
             let mut dst = std::fs::OpenOptions::new().write(true).create_new(true).open(&target)?;
             std::io::copy(&mut src, &mut dst)?;
             dst.sync_all()?;
+            // A plain copy takes the contents and the default mode with them. On Unix the mode
+            // carries the executable bit the updater's tarball installs need (`<data>/apps/…`), so
+            // it is copied over; on Windows the read-only bit lives in the attributes and a new
+            // file inherits its folder's permissions, so there is nothing to carry.
+            #[cfg(unix)]
+            if let Ok(meta) = entry.metadata()
+                && let Err(e) = std::fs::set_permissions(&target, meta.permissions())
+            {
+                // The contents are there already: a mode that could not be copied is logged, not fatal.
+                log::warn!("copied {} but not its permissions: {e}", target.display());
+            }
         }
     }
     Ok(())
 }
 
-/// The folders this version reads and writes, which an old-named twin may sit beside.
-fn current_dirs() -> Vec<PathBuf> {
+/// The folders this version reads and writes beside the executable: the updater's records, logs and
+/// downloads (under the portable root when `portable.txt` is there) and the portable root itself.
+fn dirs_beside(exe: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    // The preferences (the display name, which is also the updater's folder on Windows and macOS).
-    if let Some(dir) = crate::prefs::config_dir() {
-        dirs.push(dir.join(APP.name));
-    }
-    // The AI connections (`<data dir>/<AI app id>`).
-    if let Some(dir) = Connection::store_path(&AI_APP).and_then(|file| file.parent().map(Path::to_path_buf)) {
-        dirs.push(dir);
-    }
-    // The updater's records, logs and downloads (the portable root when `portable.txt` is there).
-    if let Ok(paths) = craft_update::Paths::for_app(&APP) {
+    if let Ok(paths) = craft_update::Paths::for_exe(&APP, exe) {
         dirs.push(paths.data);
         dirs.push(paths.cache);
     }
-    // The portable data folder beside the executable.
-    if let Some(exe_dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {
+    if let Some(exe_dir) = exe.parent() {
         dirs.push(exe_dir.join(format!("{}Data", APP.name.replace(' ', ""))));
     }
     // On Windows the updater's data and cache folders are the same one.
@@ -171,9 +228,24 @@ fn current_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// Move every old-named folder to its new name, then copy the keychain keys. Called before
-/// anything reads those folders; never fails (what can't be moved is logged and tried again next
-/// start).
+/// The folders this version reads and writes, asked of whoever uses them (the preferences file, the
+/// AI connections store, the updater and the portable root), which an old-named twin may sit beside.
+fn current_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(dir) = crate::prefs::path().and_then(|file| file.parent().map(Path::to_path_buf)) {
+        dirs.push(dir);
+    }
+    if let Some(dir) = Connection::store_path(&AI_APP).and_then(|file| file.parent().map(Path::to_path_buf)) {
+        dirs.push(dir);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        dirs.extend(dirs_beside(&exe));
+    }
+    dirs
+}
+
+/// Move every old-named folder to its new name, then copy the keychain keys. Called before anything
+/// reads those folders; never fails (what can't be moved is reported and tried again next start).
 pub fn migrate_all() {
     for new in current_dirs() {
         migrate_from_old_name(&new);
@@ -183,18 +255,78 @@ pub fn migrate_all() {
     copy_legacy_keys();
 }
 
-/// Copies the API keys saved under the old keychain service to the current one, for every saved
-/// connection that has none yet. A key already under the current service is never replaced, and the
-/// old entries are never deleted (there is no `clear_key` here on purpose: a copy that fails costs
-/// the user one paste, a delete that shouldn't have happened costs the key).
+/// `<preferences folder>/legacy-keys-copied`.
+fn keys_marker() -> Option<PathBuf> {
+    crate::prefs::path().map(|prefs| prefs.with_file_name(KEYS_MARKER))
+}
+
+/// Copies the API keys saved under the old keychain service to the current one, once. The old
+/// entries are never deleted (there is no `clear_key` here on purpose: a copy that fails costs the
+/// user one paste, a delete that shouldn't have happened costs the key).
 fn copy_legacy_keys() {
-    let all = connections_for_keys();
-    if all.is_empty() {
+    let Some(marker) = keys_marker() else { return };
+    // The one-shot rule lives in `copy_keys_once`; this is only so a finished copy stops opening
+    // the connections file on every start.
+    if marker.is_file() {
         return;
     }
-    let copied = copy_keys(&all, |c| c.has_key(&AI_APP), |c| c.key(&AI_LEGACY_APP), |c, key| c.set_key(&AI_APP, key));
+    let all = connections_for_keys();
+    let copied = copy_keys_once(&marker, &all, |c| c.has_key(&AI_APP), |c| c.key(&AI_LEGACY_APP), |c, key| c.set_key(&AI_APP, key));
     if copied > 0 {
         log::info!("copied {copied} API key(s) from the Local Mind keychain entry to the Local Mindmap one");
+    }
+}
+
+/// [`copy_legacy_keys`] with the marker, the connections and the keychain passed in (so the one-shot
+/// rule can be tested on a temporary folder).
+///
+/// The marker, not an empty entry, decides whether the copy already happened: the app writes `""`
+/// when the user saves a connection that needs no key (a local provider), so an empty entry is a
+/// decision, and copying the old key over it would send that provider's key as
+/// `Authorization: Bearer` to the new base URL.
+fn copy_keys_once(
+    marker: &Path,
+    all: &[Connection],
+    has_current: impl Fn(&Connection) -> bool,
+    legacy_key: impl Fn(&Connection) -> Result<String, String>,
+    set_current: impl Fn(&Connection, &str) -> Result<(), String>,
+) -> usize {
+    if marker.is_file() || all.is_empty() {
+        return 0;
+    }
+    let (copied, failed) = copy_keys(all, has_current, legacy_key, set_current);
+    if failed == 0 {
+        mark_keys_copied(marker);
+    } else {
+        // A keychain that refused this time may answer next time; nothing was marked, so the copy
+        // runs again — it can only fill the entries that are still empty.
+        log::warn!("legacy AI keys: {failed} key(s) couldn't be copied; the copy runs again next start");
+    }
+    copied
+}
+
+/// Writes the marker, once and never over an existing one. The marker lives in the preferences
+/// folder, so it never creates that folder while the old one is still waiting to be moved: a new
+/// folder would make the old one unmovable for good.
+fn mark_keys_copied(marker: &Path) {
+    let Some(parent) = marker.parent() else { return };
+    if !parent.is_dir() {
+        if old_dir_of(parent).is_some_and(|old| old.is_dir()) {
+            log::warn!("legacy AI keys: the copy is done, but {} is waiting to be moved; it isn't marked yet", parent.display());
+            return;
+        }
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            report(format_args!("legacy AI keys: the copy is done, but {} couldn't be created: {e}", parent.display()));
+            return;
+        }
+    }
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(marker) {
+        Ok(file) => {
+            let _ = file.sync_all();
+        }
+        // Another start won the race: the copy is marked all the same.
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => report(format_args!("legacy AI keys: the copy is done, but {} couldn't be written: {e}", marker.display())),
     }
 }
 
@@ -223,14 +355,16 @@ fn load_legacy_connections() -> Vec<Connection> {
     }
 }
 
-/// [`copy_legacy_keys`] with the keychain behind three closures (so it can be tested without one).
+/// [`copy_keys_once`] with the keychain behind three closures (so it can be tested without one).
+/// Returns how many keys were copied and how many could not be read or written.
 fn copy_keys(
     all: &[Connection],
     has_current: impl Fn(&Connection) -> bool,
     legacy_key: impl Fn(&Connection) -> Result<String, String>,
     set_current: impl Fn(&Connection, &str) -> Result<(), String>,
-) -> usize {
+) -> (usize, usize) {
     let mut copied = 0;
+    let mut failed = 0;
     for connection in all {
         if has_current(connection) {
             continue;
@@ -239,6 +373,7 @@ fn copy_keys(
             Ok(key) => key,
             Err(e) => {
                 log::warn!("legacy AI keys: the key of `{}` can't be read ({e})", connection.id);
+                failed += 1;
                 continue;
             }
         };
@@ -250,10 +385,13 @@ fn copy_keys(
                 log::info!("copied the API key of connection `{}` to the Local Mindmap keychain entry", connection.id);
                 copied += 1;
             }
-            Err(e) => log::warn!("couldn't copy the API key of `{}`: {e}", connection.id),
+            Err(e) => {
+                log::warn!("couldn't copy the API key of `{}`: {e}", connection.id);
+                failed += 1;
+            }
         }
     }
-    copied
+    (copied, failed)
 }
 
 #[cfg(test)]
@@ -280,6 +418,31 @@ mod tests {
 
     fn connection(id: &str) -> Connection {
         Connection { id: id.to_owned(), provider: "openai".to_owned(), label: "OpenAI".to_owned(), base_url: String::new(), model: "gpt".to_owned() }
+    }
+
+    /// A rename that fails the first time (another volume, a file held open) and really renames
+    /// after that, so a copy is taken and placed.
+    fn cross_volume_once() -> impl Fn(&Path, &Path) -> std::io::Result<()> {
+        let calls = std::cell::Cell::new(0);
+        move |from: &Path, to: &Path| {
+            let n = calls.get() + 1;
+            calls.set(n);
+            if n == 1 {
+                Err(std::io::Error::other(format!("cross-device: {} -> {}", from.display(), to.display())))
+            } else {
+                std::fs::rename(from, to)
+            }
+        }
+    }
+
+    fn stages(root: &Path, name: &str) -> Vec<String> {
+        let prefix = format!(".{name}.migrating-");
+        std::fs::read_dir(root)
+            .expect("dir")
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(&prefix))
+            .collect()
     }
 
     #[test]
@@ -322,15 +485,43 @@ mod tests {
 
     /// Every folder the app reads or writes today is named the way the table expects. A folder that
     /// drifts (a path built somewhere else, a rename in the updater) stops being migrated silently,
-    /// which is exactly the loss this module exists to prevent.
+    /// which is exactly the loss this module exists to prevent — so the paths are asked of the code
+    /// that uses them, not written out again here.
     #[test]
     fn every_folder_the_app_uses_is_in_the_table() {
-        let dirs = current_dirs();
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        if let Some(dir) = crate::prefs::path().and_then(|file| file.parent().map(Path::to_path_buf)) {
+            dirs.push(dir);
+        }
+        if let Some(dir) = Connection::store_path(&AI_APP).and_then(|file| file.parent().map(Path::to_path_buf)) {
+            dirs.push(dir);
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            dirs.extend(dirs_beside(&exe));
+        }
         assert!(dirs.len() >= 4, "the app's folders are: {dirs:?}");
         for dir in dirs {
             let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             assert!(NAMES.iter().any(|(new, _)| *new == name), "{} is not in NAMES: the migration would never see it", dir.display());
         }
+    }
+
+    #[test]
+    fn a_portable_install_migrates_the_folder_beside_the_executable() {
+        let root = temp("portable");
+        std::fs::write(root.join("portable.txt"), b"").expect("portable");
+        let dirs = dirs_beside(&root.join("localmindmap.exe"));
+        let portable = root.join("LocalMindmapData");
+        assert!(dirs.contains(&portable), "the portable root is not visited: {dirs:?}");
+        assert!(dirs.contains(&portable.join("data")), "the updater's portable data folder is not visited: {dirs:?}");
+        // The old portable folder beside the executable is the one that moves, with what it holds.
+        let old = root.join("LocalMindData");
+        std::fs::create_dir_all(old.join("logs")).expect("old");
+        std::fs::write(old.join("logs").join("update.log"), b"log").expect("log");
+        assert_eq!(migrate_from_old_name(&portable), Outcome::Moved);
+        assert_eq!(std::fs::read(portable.join("logs/update.log")).expect("log"), b"log");
+        assert!(!old.exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -396,14 +587,57 @@ mod tests {
     #[test]
     fn the_copy_path_leaves_the_old_folder_and_a_complete_new_one() {
         let root = temp("copy");
-        let old = old_folder(&root, "LocalMindData");
-        let new = root.join("LocalMindmapData");
-        // The fallback taken when a rename isn't possible (another volume, a file held open).
-        let stage = root.join("stage");
-        copy_tree(&old, &stage, 0).expect("copy");
-        std::fs::rename(&stage, &new).expect("rename into place");
+        let old = old_folder(&root, "Local Mind");
+        let new = root.join("Local Mindmap");
+        assert_eq!(migrate_dir_with(&old, &new, cross_volume_once()), Outcome::Copied);
+        assert_eq!(std::fs::read(new.join("prefs.json")).expect("prefs"), b"{\"theme\":\"dark\"}");
         assert_eq!(std::fs::read(new.join("logs/update.log")).expect("log"), b"log");
         assert!(old.join("prefs.json").is_file(), "the copy keeps the original");
+        assert!(stages(&root, "Local Mindmap").is_empty(), "a staging folder stayed behind: {:?}", stages(&root, "Local Mindmap"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_folder_that_appears_during_the_copy_is_left_as_it_is() {
+        let root = temp("raced");
+        let old = old_folder(&root, "Local Mind");
+        let new = root.join("Local Mindmap");
+        let calls = std::cell::Cell::new(0);
+        let rename = |_from: &Path, to: &Path| {
+            let n = calls.get() + 1;
+            calls.set(n);
+            if n == 1 {
+                return Err(std::io::Error::other("cross-device"));
+            }
+            // Another instance placed the folder while this one was copying.
+            std::fs::create_dir_all(to)?;
+            std::fs::write(to.join("theirs.json"), b"x")?;
+            Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "the new folder appeared meanwhile"))
+        };
+        assert_eq!(migrate_dir_with(&old, &new, rename), Outcome::Nothing);
+        assert!(new.join("theirs.json").is_file(), "the other instance's folder is kept as it is");
+        assert!(old.join("prefs.json").is_file(), "the old folder stays");
+        assert!(stages(&root, "Local Mindmap").is_empty(), "the staging folder stayed behind");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_interrupted_copy_leaves_no_staging_folder_behind_the_next_time() {
+        let root = temp("stale");
+        let old = old_folder(&root, "Local Mind");
+        let new = root.join("Local Mindmap");
+        // What a killed copy left: this destination's own staging, the staging of another
+        // destination, and a name that only looks like a staging folder.
+        let stale = root.join(".Local Mindmap.migrating-4242");
+        std::fs::create_dir_all(stale.join("half")).expect("stale");
+        let other = root.join(".Local Mind.migrating-4242");
+        std::fs::create_dir_all(&other).expect("other");
+        let lookalike = root.join(".Local Mindmap.migrating-not-a-pid");
+        std::fs::create_dir_all(&lookalike).expect("lookalike");
+        assert_eq!(migrate_dir_with(&old, &new, cross_volume_once()), Outcome::Copied);
+        assert!(!stale.exists(), "the interrupted copy's staging folder is gone");
+        assert!(other.is_dir(), "another destination's staging folder is left alone");
+        assert!(lookalike.is_dir(), "a name that only looks like a staging folder is left alone");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -419,12 +653,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_copy_keeps_the_mode_of_the_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = temp("mode");
+        let old = old_folder(&root, "Local Mind");
+        let tool = old.join("apps").join("localmindmap");
+        std::fs::create_dir_all(old.join("apps")).expect("apps");
+        std::fs::write(&tool, b"#!/bin/sh\n").expect("tool");
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        copy_tree(&old, &root.join("dst"), 0).expect("copy");
+        let copied = root.join("dst").join("apps").join("localmindmap");
+        assert_eq!(std::fs::metadata(&copied).expect("meta").permissions().mode() & 0o111, 0o111, "the executable bit survives");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn a_key_is_copied_to_the_current_service_and_the_old_entry_stays() {
         let all = [connection("localmind")];
         let current = std::cell::RefCell::new(Vec::<String>::new());
         // The old side is only ever read: `copy_keys` has no way to delete an entry.
-        let copied = copy_keys(
+        let (copied, failed) = copy_keys(
             &all,
             |_| false,
             |_| Ok("sk-old".to_owned()),
@@ -433,7 +683,7 @@ mod tests {
                 Ok(())
             },
         );
-        assert_eq!(copied, 1);
+        assert_eq!((copied, failed), (1, 0));
         assert_eq!(current.borrow().as_slice(), ["localmind=sk-old"]);
     }
 
@@ -441,7 +691,7 @@ mod tests {
     fn a_key_under_the_current_service_is_never_replaced() {
         let all = [connection("localmindmap")];
         let current = std::cell::RefCell::new(Vec::<String>::new());
-        let copied = copy_keys(
+        let (copied, failed) = copy_keys(
             &all,
             |_| true,
             |_| Ok("sk-old".to_owned()),
@@ -450,15 +700,14 @@ mod tests {
                 Ok(())
             },
         );
-        assert_eq!(copied, 0);
+        assert_eq!((copied, failed), (0, 0));
         assert!(current.borrow().is_empty(), "a key already filed under the new service wins");
     }
 
     #[test]
     fn a_connection_without_an_old_key_copies_nothing() {
         let all = [connection("localmind")];
-        let copied = copy_keys(&all, |_| false, |_| Ok(String::new()), |_, _| panic!("nothing to copy"));
-        assert_eq!(copied, 0);
+        assert_eq!(copy_keys(&all, |_| false, |_| Ok(String::new()), |_, _| panic!("nothing to copy")), (0, 0));
     }
 
     #[test]
@@ -466,7 +715,7 @@ mod tests {
         let all = [connection("a"), connection("b")];
         let current = std::cell::RefCell::new(Vec::<String>::new());
         // `a` cannot be read; `b` can, and is copied: one broken entry does not stop the rest.
-        let copied = copy_keys(
+        let (copied, failed) = copy_keys(
             &all,
             |_| false,
             |c| if c.id == "a" { Err("keychain locked".to_owned()) } else { Ok("sk-b".to_owned()) },
@@ -475,14 +724,89 @@ mod tests {
                 Ok(())
             },
         );
-        assert_eq!(copied, 1);
+        assert_eq!((copied, failed), (1, 1));
         assert_eq!(current.borrow().as_slice(), ["b=sk-b"]);
     }
 
     #[test]
     fn a_write_that_fails_is_counted_as_nothing_and_is_not_fatal() {
         let all = [connection("localmind")];
-        let copied = copy_keys(&all, |_| false, |_| Ok("sk".to_owned()), |_, _| Err("locked".to_owned()));
-        assert_eq!(copied, 0);
+        assert_eq!(copy_keys(&all, |_| false, |_| Ok("sk".to_owned()), |_, _| Err("locked".to_owned())), (0, 1));
+    }
+
+    /// The blocker the review found: the entry in the new service was empty *on purpose* (the user
+    /// saved a connection that needs no key), and a second run put the old provider's key back,
+    /// which the app would then send as `Authorization: Bearer` to the new base URL.
+    #[test]
+    fn the_keys_are_copied_once_and_an_entry_emptied_on_purpose_is_not_refilled() {
+        let root = temp("once");
+        let marker = root.join(KEYS_MARKER);
+        let all = [connection("localmind")];
+        let entry = std::cell::RefCell::new(None::<String>);
+        let has_current = |_: &Connection| entry.borrow().is_some();
+        let legacy_key = |_: &Connection| Ok("sk-old".to_owned());
+        let set_current = |_: &Connection, key: &str| {
+            *entry.borrow_mut() = Some(key.to_owned());
+            Ok(())
+        };
+
+        assert_eq!(copy_keys_once(&marker, &all, has_current, legacy_key, set_current), 1);
+        assert_eq!(entry.borrow().as_deref(), Some("sk-old"));
+
+        // The app saves a connection that needs no key: the entry becomes empty, on purpose.
+        *entry.borrow_mut() = None;
+        assert_eq!(copy_keys_once(&marker, &all, has_current, legacy_key, set_current), 0);
+        assert_eq!(*entry.borrow(), None, "the old key must not come back over an entry emptied on purpose");
+        assert!(marker.is_file(), "the copy is marked");
+        assert!(std::fs::read(&marker).expect("marker").is_empty(), "the marker is written once, not appended to");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_failed_copy_is_not_marked_and_runs_again_with_only_the_empty_entries() {
+        let root = temp("retry");
+        let marker = root.join(KEYS_MARKER);
+        let all = [connection("a")];
+        let entry = std::cell::RefCell::new(None::<String>);
+        let has_current = |_: &Connection| entry.borrow().is_some();
+        let locked = |_: &Connection| Err("keychain locked".to_owned());
+        let set_current = |_: &Connection, key: &str| {
+            *entry.borrow_mut() = Some(key.to_owned());
+            Ok(())
+        };
+        assert_eq!(copy_keys_once(&marker, &all, has_current, locked, set_current), 0);
+        assert!(!marker.exists(), "a copy that read nothing is not marked as done");
+
+        // The keychain answers this time: the copy happens, and is marked.
+        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Ok("sk".to_owned()), set_current), 1);
+        assert!(marker.is_file());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_marker_never_creates_the_folder_whose_old_twin_is_still_waiting_to_move() {
+        let root = temp("marker");
+        let new = root.join("Local Mindmap");
+        let old = root.join("Local Mind");
+        std::fs::create_dir_all(&old).expect("old");
+        let marker = new.join(KEYS_MARKER);
+        mark_keys_copied(&marker);
+        assert!(!new.exists(), "creating the preferences folder would make the old one unmovable for good");
+
+        // Nothing pending: the folder and the marker are made.
+        std::fs::remove_dir_all(&old).expect("rm");
+        mark_keys_copied(&marker);
+        assert!(marker.is_file());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn nothing_to_copy_is_not_marked_and_leaves_no_folder() {
+        let root = temp("empty");
+        let marker = root.join("Nowhere").join(KEYS_MARKER);
+        assert_eq!(copy_keys_once(&marker, &[], |_| false, |_| Ok(String::new()), |_, _| Ok(())), 0);
+        assert!(!marker.exists());
+        assert!(!root.join("Nowhere").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

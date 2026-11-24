@@ -4,9 +4,9 @@ O que neste repositório vem de fora, e o que este app faz de diferente da spec.
 
 ## De onde vem o comportamento
 
-**Spec:** `C:\Dev\Local\LocalMind` — o **LocalMind** Electron/React/TypeScript, v0.5.9 (repo
-`Anon5T4R/LocalMind`), **somente leitura**: nada aqui o altera, e nada de `storytold/*` é lido em
-build, teste ou release.
+**Spec:** o **LocalMind** Electron/React/TypeScript, v0.5.9 — **somente leitura**. O app não existe
+mais na máquina (nem em `C:\Dev\legado\Local\`) nem como repositório no GitHub: a spec ficou só no
+histórico do git deste repositório. Nada de `storytold/*` é lido em build, teste ou release.
 
 O que a porta copia é o comportamento e a geometria, não o código: o layout do `layout.ts` (mesmas
 constantes), as regras da árvore do `store.ts`, o formato do `.tmind` do `persistence.ts`, o texto do

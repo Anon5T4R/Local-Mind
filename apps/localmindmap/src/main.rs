@@ -70,12 +70,6 @@ SCRIPTS AND AI AGENTS:
 ";
 
 fn main() -> eframe::Result {
-    // Windows: the update helper is a copy of this program started with `--finish-update`. Nothing
-    // else runs in that mode, and nothing at all happens off Windows.
-    if let Some(result) = craft_update::self_update::finish(&APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
-        std::process::exit(i32::from(result.is_err()));
-    }
-
     let mut initial: Option<std::path::PathBuf> = None;
     let mut unknown: Vec<String> = Vec::new();
     // Agent-native: `mcp`, `run` e `commands` saem antes da janela; o `--control PORT` e as
@@ -84,6 +78,23 @@ fn main() -> eframe::Result {
     if let Some(code) = automation::cli::run(&args) {
         std::process::exit(code);
     }
+
+    // The product was renamed (Local Mind -> Local Mindmap): move the old-named folders over once
+    // and copy the keychain keys, before anything reads or writes them.
+    //
+    // The place is the point. After the headless dispatch: `mcp`/`run`/`commands` read maps only,
+    // and the tests that drive them run this same binary, so a test run never moves a real user's
+    // folders. Before the update helper: its failure path creates `<data>/logs`, and a folder that
+    // already exists at the new name leaves the old updater folder with nowhere to move — it would
+    // never be migrated.
+    legacy::migrate_all();
+
+    // Windows: the update helper is a copy of this program started with `--finish-update`. Nothing
+    // else runs in that mode, and nothing at all happens off Windows.
+    if let Some(result) = craft_update::self_update::finish(&APP, &std::env::args_os().skip(1).collect::<Vec<_>>()) {
+        std::process::exit(i32::from(result.is_err()));
+    }
+
     let launch = match automation::launch::parse(&args) {
         Ok(launch) => launch,
         Err(e) => {
@@ -133,12 +144,6 @@ fn main() -> eframe::Result {
         eprintln!("\n{HELP}");
         std::process::exit(2);
     }
-
-    // The product was renamed (Local Mind -> Local Mindmap): move the old-named folders over once
-    // and copy the keychain keys, before the window reads any of them (preferences, AI connections,
-    // the updater's folders). The headless paths above read maps only, and the tests that run this
-    // binary drive those paths, so a test run never moves a user's real folders.
-    legacy::migrate_all();
 
     // Who draws the window frame: this is the suite's one decision (the desktop on Windows, macOS
     // and X11; on Wayland, the compositor when it offers server-side decorations, the app on GNOME's
