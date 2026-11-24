@@ -2671,7 +2671,7 @@ dependencies = [
 
 [[package]]
 name = "localmindmap"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "craft-ai-ui",
  "craft-desktop-theme",
@@ -2701,7 +2701,7 @@ dependencies = [
 
 [[package]]
 name = "localmindmap-ai"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "local-ai",
  "localmindmap-model",
@@ -2711,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "localmindmap-io"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "localmindmap-layout",
  "localmindmap-model",
@@ -2720,14 +2720,14 @@ dependencies = [
 
 [[package]]
 name = "localmindmap-layout"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "localmindmap-model",
 ]
 
 [[package]]
 name = "localmindmap-model"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6073,7 +6073,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "1.2.10"
+version = "1.3.0"
 dependencies = [
  "serde_json",
 ]
