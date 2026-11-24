@@ -91,7 +91,12 @@ pub fn old_dir_of(new: &Path) -> Option<PathBuf> {
 
 /// [`migrate_dir`] from the folder the old name used in place of `new`, when there is one.
 pub fn migrate_from_old_name(new: &Path) -> Outcome {
-    old_dir_of(new).map_or(Outcome::Nothing, |old| migrate_dir(&old, new))
+    old_dir_of(new).map_or(Outcome::Nothing, |old| {
+        // An interrupted copy left its staging folder beside the destination: it goes first, or a
+        // rename that succeeds would keep it around forever (the copy path's cleanup never runs).
+        clear_stale_stages(new);
+        migrate_dir(&old, new)
+    })
 }
 
 /// Move `old` to `new`, once: only when `old` is a folder and `new` doesn't exist. A rename on one
@@ -123,8 +128,8 @@ fn migrate_dir_with(old: &Path, new: &Path, rename: impl Fn(&Path, &Path) -> std
         log::info!("moved the Local Mind folder {} to {}", old.display(), new.display());
         return Outcome::Moved;
     }
-    // A copy interrupted last time left its staging folder behind: this migration's own leftovers
-    // go before the new copy starts.
+    // `migrate_from_old_name` sweeps a staging folder left by an interrupted copy before it tries
+    // the rename; a direct call to this function gets the same before the copy starts.
     clear_stale_stages(new);
     let stage = stage_of(new);
     let copied = copy_tree(old, &stage, 0).and_then(|()| {
@@ -284,6 +289,11 @@ fn copy_legacy_keys() {
 /// when the user saves a connection that needs no key (a local provider), so an empty entry is a
 /// decision, and copying the old key over it would send that provider's key as
 /// `Authorization: Bearer` to the new base URL.
+///
+/// The mark is written on the **first attempt**, whether it worked or not. A key the keychain
+/// refused (or a connections list that was empty at that moment) costs the user one paste;
+/// retrying later is the dangerous direction — by then the entry may be empty on purpose, and the
+/// copy would put the old provider's key back.
 fn copy_keys_once(
     marker: &Path,
     all: &[Connection],
@@ -291,32 +301,30 @@ fn copy_keys_once(
     legacy_key: impl Fn(&Connection) -> Result<String, String>,
     set_current: impl Fn(&Connection, &str) -> Result<(), String>,
 ) -> usize {
-    if marker.is_file() || all.is_empty() {
+    if marker.is_file() {
         return 0;
     }
     let (copied, failed) = copy_keys(all, has_current, legacy_key, set_current);
-    if failed == 0 {
-        mark_keys_copied(marker);
-    } else {
-        // A keychain that refused this time may answer next time; nothing was marked, so the copy
-        // runs again — it can only fill the entries that are still empty.
-        log::warn!("legacy AI keys: {failed} key(s) couldn't be copied; the copy runs again next start");
+    if failed > 0 {
+        log::warn!("legacy AI keys: {failed} key(s) couldn't be copied; they have to be pasted again");
     }
+    mark_keys_copied(marker);
     copied
 }
 
 /// Writes the marker, once and never over an existing one. The marker lives in the preferences
 /// folder, so it never creates that folder while the old one is still waiting to be moved: a new
-/// folder would make the old one unmovable for good.
+/// folder would make the old one unmovable for good. (The mark is then deferred, and the next start
+/// copies the keys again — the only case where it does.)
 fn mark_keys_copied(marker: &Path) {
     let Some(parent) = marker.parent() else { return };
     if !parent.is_dir() {
         if old_dir_of(parent).is_some_and(|old| old.is_dir()) {
-            log::warn!("legacy AI keys: the copy is done, but {} is waiting to be moved; it isn't marked yet", parent.display());
+            log::warn!("legacy AI keys: {} is waiting to be moved, so the keys aren't marked as copied yet", parent.display());
             return;
         }
         if let Err(e) = std::fs::create_dir_all(parent) {
-            report(format_args!("legacy AI keys: the copy is done, but {} couldn't be created: {e}", parent.display()));
+            report(format_args!("legacy AI keys: {} couldn't be created ({e}); the keys aren't marked as copied", parent.display()));
             return;
         }
     }
@@ -326,7 +334,7 @@ fn mark_keys_copied(marker: &Path) {
         }
         // Another start won the race: the copy is marked all the same.
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => report(format_args!("legacy AI keys: the copy is done, but {} couldn't be written: {e}", marker.display())),
+        Err(e) => report(format_args!("legacy AI keys: {} couldn't be written ({e}); the keys aren't marked as copied", marker.display())),
     }
 }
 
@@ -485,20 +493,11 @@ mod tests {
 
     /// Every folder the app reads or writes today is named the way the table expects. A folder that
     /// drifts (a path built somewhere else, a rename in the updater) stops being migrated silently,
-    /// which is exactly the loss this module exists to prevent — so the paths are asked of the code
-    /// that uses them, not written out again here.
+    /// which is exactly the loss this module exists to prevent, so the list comes from the same
+    /// function the migration reads.
     #[test]
     fn every_folder_the_app_uses_is_in_the_table() {
-        let mut dirs: Vec<PathBuf> = Vec::new();
-        if let Some(dir) = crate::prefs::path().and_then(|file| file.parent().map(Path::to_path_buf)) {
-            dirs.push(dir);
-        }
-        if let Some(dir) = Connection::store_path(&AI_APP).and_then(|file| file.parent().map(Path::to_path_buf)) {
-            dirs.push(dir);
-        }
-        if let Ok(exe) = std::env::current_exe() {
-            dirs.extend(dirs_beside(&exe));
-        }
+        let dirs = current_dirs();
         assert!(dirs.len() >= 4, "the app's folders are: {dirs:?}");
         for dir in dirs {
             let name = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -641,6 +640,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// The normal path: the copy of a previous start died, and this start's rename succeeds at
+    /// once. The staging folder must not survive it (the copy path's cleanup never runs then).
+    #[test]
+    fn a_rename_that_succeeds_still_sweeps_the_staging_of_an_interrupted_copy() {
+        let root = temp("stale-moved");
+        old_folder(&root, "Local Mind");
+        let new = root.join("Local Mindmap");
+        let stale = root.join(".Local Mindmap.migrating-4242");
+        std::fs::create_dir_all(stale.join("half")).expect("stale");
+        let other = root.join(".Local Mind.migrating-4242");
+        std::fs::create_dir_all(&other).expect("other");
+        assert_eq!(migrate_from_old_name(&new), Outcome::Moved);
+        assert!(!stale.exists(), "the interrupted copy's staging folder is gone");
+        assert!(other.is_dir(), "another destination's staging folder is left alone");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn a_nested_too_deep_tree_is_refused_not_followed() {
         let root = temp("deep");
@@ -763,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_copy_is_not_marked_and_runs_again_with_only_the_empty_entries() {
+    fn a_failed_copy_is_marked_on_the_first_attempt_and_the_second_pass_copies_nothing() {
         let root = temp("retry");
         let marker = root.join(KEYS_MARKER);
         let all = [connection("a")];
@@ -775,11 +791,36 @@ mod tests {
             Ok(())
         };
         assert_eq!(copy_keys_once(&marker, &all, has_current, locked, set_current), 0);
-        assert!(!marker.exists(), "a copy that read nothing is not marked as done");
+        assert!(marker.is_file(), "the first attempt is marked even when it could not read the key");
 
-        // The keychain answers this time: the copy happens, and is marked.
-        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Ok("sk".to_owned()), set_current), 1);
-        assert!(marker.is_file());
+        // The keychain answers this time, but the attempt is spent: nothing is copied.
+        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Ok("sk".to_owned()), set_current), 0);
+        assert_eq!(*entry.borrow(), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The sequence the review found: the first attempt fails (the keychain refuses), the user then
+    /// saves a connection that needs no key, and only after that the keychain answers. The old key
+    /// must not come back as `Authorization: Bearer` for the new base URL.
+    #[test]
+    fn a_keychain_that_answers_late_cannot_refill_an_entry_emptied_on_purpose() {
+        let root = temp("late");
+        let marker = root.join(KEYS_MARKER);
+        let all = [connection("localmind")];
+        let entry = std::cell::RefCell::new(None::<String>);
+        let has_current = |_: &Connection| entry.borrow().is_some();
+        let set_current = |_: &Connection, key: &str| {
+            *entry.borrow_mut() = Some(key.to_owned());
+            Ok(())
+        };
+        // Run 1: the keychain refuses.
+        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Err("keychain locked".to_owned()), set_current), 0);
+        // Run 2: the user saves a connection with no key of its own (a local provider).
+        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Ok("sk-old".to_owned()), set_current), 0);
+        assert_eq!(*entry.borrow(), None);
+        // Run 3: the keychain would answer now.
+        assert_eq!(copy_keys_once(&marker, &all, has_current, |_| Ok("sk-old".to_owned()), set_current), 0);
+        assert_eq!(*entry.borrow(), None, "the old key must never be sent to the provider the user set up");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -801,12 +842,13 @@ mod tests {
     }
 
     #[test]
-    fn nothing_to_copy_is_not_marked_and_leaves_no_folder() {
+    fn an_empty_first_attempt_is_marked_too_so_nothing_stays_armed() {
         let root = temp("empty");
         let marker = root.join("Nowhere").join(KEYS_MARKER);
-        assert_eq!(copy_keys_once(&marker, &[], |_| false, |_| Ok(String::new()), |_, _| Ok(())), 0);
-        assert!(!marker.exists());
-        assert!(!root.join("Nowhere").exists());
+        assert_eq!(copy_keys_once(&marker, &[], |_| false, |_| Ok("sk".to_owned()), |_, _| Ok(())), 0);
+        // Nothing to copy is a first attempt too: the connections the user saves later are theirs,
+        // and an old key must never appear over them.
+        assert!(marker.is_file());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

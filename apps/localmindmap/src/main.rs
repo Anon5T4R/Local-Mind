@@ -78,12 +78,29 @@ fn main() -> eframe::Result {
     if let Some(code) = automation::cli::run(&args) {
         std::process::exit(code);
     }
+    // Printing and leaving reads nothing and writes nothing: `packaging/linux/package.sh` runs
+    // `--version` at the end of every release build, and migrating there would move the folders of
+    // whoever is packaging. This has to come before `legacy::migrate_all()`.
+    for arg in &args {
+        match arg.as_str() {
+            "--version" => {
+                println!("{} {}", APP.id, env!("CARGO_PKG_VERSION"));
+                return Ok(());
+            }
+            "-h" | "--help" => {
+                print!("{HELP}");
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
 
     // The product was renamed (Local Mind -> Local Mindmap): move the old-named folders over once
     // and copy the keychain keys, before anything reads or writes them.
     //
-    // The place is the point. After the headless dispatch: `mcp`/`run`/`commands` read maps only,
-    // and the tests that drive them run this same binary, so a test run never moves a real user's
+    // The place is the point. After the headless dispatch and the print-and-exit flags: `mcp`,
+    // `run`, `commands`, `--version` and `--help` touch none of these folders, and the tests and
+    // packaging scripts run them, so neither a test run nor a release build moves a real user's
     // folders. Before the update helper: its failure path creates `<data>/logs`, and a folder that
     // already exists at the new name leaves the old updater folder with nowhere to move — it would
     // never be migrated.
@@ -123,14 +140,6 @@ fn main() -> eframe::Result {
     };
     for arg in &launch.args {
         match arg.as_str() {
-            "--version" => {
-                println!("{} {}", APP.id, env!("CARGO_PKG_VERSION"));
-                return Ok(());
-            }
-            "-h" | "--help" => {
-                print!("{HELP}");
-                return Ok(());
-            }
             other if other.starts_with('-') => unknown.push(other.to_string()),
             // One map per window: a second path is a mistake, not something to guess about.
             other if initial.is_some() => unknown.push(other.to_string()),
