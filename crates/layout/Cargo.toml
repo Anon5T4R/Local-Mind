@@ -1,15 +1,15 @@
 [package]
-name = "localmind-layout"
+name = "localmindmap-layout"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Local Mind - the balanced four-way mind map layout (geometry only, no UI)"
+description = "Local Mindmap - the balanced four-way mind map layout (geometry only, no UI)"
 
 [lints]
 workspace = true
 
 [dependencies]
-localmind-model = { workspace = true }
+localmindmap-model = { workspace = true }

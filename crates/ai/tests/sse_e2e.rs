@@ -80,9 +80,9 @@ fn a_streamed_answer_becomes_a_map() {
     assert_eq!(pieces, json, "the deltas arrive in order");
     assert_eq!(answer, json, "the joined answer is the model's JSON");
 
-    let request = localmind_ai::Request::GenerateMap { topic: "Sepse".into(), depth: 2, breadth: 4 };
-    match localmind_ai::actions::interpret(&request, &answer).expect("the answer is a map") {
-        localmind_ai::Outcome::NewMap { title, nodes } => {
+    let request = localmindmap_ai::Request::GenerateMap { topic: "Sepse".into(), depth: 2, breadth: 4 };
+    match localmindmap_ai::actions::interpret(&request, &answer).expect("the answer is a map") {
+        localmindmap_ai::Outcome::NewMap { title, nodes } => {
             assert_eq!(title, "Sepse");
             assert_eq!(nodes.first().map(|n| n.text.as_str()), Some("Sepse"));
             let children: Vec<&str> = nodes.iter().filter(|n| n.parent_id.as_deref().is_some()).map(|n| n.text.as_str()).collect();

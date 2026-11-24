@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use localmind_model::{MindNode, Side};
+use localmindmap_model::{MindNode, Side};
 
 /// The default card width.
 pub const NODE_W: f32 = 220.0;
@@ -381,7 +381,7 @@ fn extents<'a>(index: &Index<'a>, vertical: bool) -> HashMap<&'a str, f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use localmind_model::MindNode;
+    use localmindmap_model::MindNode;
 
     /// A node without the boilerplate: `text` is the id, which is what the assertions show.
     fn node(id: &str, parent: Option<&str>) -> MindNode {

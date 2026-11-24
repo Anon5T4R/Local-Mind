@@ -1,18 +1,18 @@
 [package]
-name = "localmind-ai"
+name = "localmindmap-ai"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Local Mind - remote AI for the map: prompts, the tolerant JSON extractor and the actions"
+description = "Local Mindmap - remote AI for the map: prompts, the tolerant JSON extractor and the actions"
 
 [lints]
 workspace = true
 
 [dependencies]
-localmind-model = { workspace = true }
+localmindmap-model = { workspace = true }
 # The suite's BYOK client (`local_ai::chat_stream`, `Connection`, `Msg`).
 local-ai = { workspace = true }
 serde = { workspace = true }

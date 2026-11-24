@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/localmind", "xtask"]
+members = ["crates/*", "apps/localmindmap", "xtask"]
 exclude = ["libs"]
-default-members = ["crates/*", "apps/localmind", "xtask"]
+default-members = ["crates/*", "apps/localmindmap", "xtask"]
 
 [workspace.package]
 version = "1.2.10"
@@ -12,7 +12,7 @@ rust-version = "1.95"
 # Nada da suíte vai ao crates.io: dependência `path` sem versão numa crate publicável reprova o
 # `cargo-deny` (wildcards). Cada membro herda com `publish.workspace = true`.
 publish = false
-repository = "https://github.com/Anon5T4R/Local-Mind"
+repository = "https://github.com/Styx-Studios/Local-Mindmap"
 
 [workspace.dependencies]
 # Vendored craft libs (libs/craft-libs). `crates/update` comes from the suite's single source,
@@ -35,11 +35,11 @@ craft-window = { path = "libs/craft-libs/crates/window/", features = ["egui"] }
 # source of truth in local-libs, vendored here and replicated by its sync.ps1.
 craft-desktop-theme = { path = "libs/craft-libs/crates/desktop-theme/" }
 
-# the app's own layers (crates/localmind-*)
-localmind-ai = { path = "crates/ai" }
-localmind-io = { path = "crates/io" }
-localmind-layout = { path = "crates/layout" }
-localmind-model = { path = "crates/model" }
+# the app's own layers (crates/localmindmap-*)
+localmindmap-ai = { path = "crates/ai" }
+localmindmap-io = { path = "crates/io" }
+localmindmap-layout = { path = "crates/layout" }
+localmindmap-model = { path = "crates/model" }
 
 # BYOK AI shared by the suite: the user's own key, one OpenAI-compatible client for every provider.
 # The copy under `libs/local-ai` is a mirror of `Anon5T4R/local-ai` (same bytes as the siblings

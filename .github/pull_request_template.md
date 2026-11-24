@@ -1,5 +1,5 @@
 <!--
-Obrigado por contribuir com o Local Mind.
+Obrigado por contribuir com o Local Mindmap.
 
 Baseie o PR em `main`, a única branch de integração. Apague as seções que não se aplicam.
 -->

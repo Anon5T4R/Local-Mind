@@ -2670,7 +2670,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "localmind"
+name = "localmindmap"
 version = "1.2.10"
 dependencies = [
  "craft-ai-ui",
@@ -2686,10 +2686,10 @@ dependencies = [
  "egui_extras",
  "egui_kittest",
  "local-ai",
- "localmind-ai",
- "localmind-io",
- "localmind-layout",
- "localmind-model",
+ "localmindmap-ai",
+ "localmindmap-io",
+ "localmindmap-layout",
+ "localmindmap-model",
  "log",
  "miniz_oxide 0.8.9",
  "pollster 1.0.1",
@@ -2700,33 +2700,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "localmind-ai"
+name = "localmindmap-ai"
 version = "1.2.10"
 dependencies = [
  "local-ai",
- "localmind-model",
+ "localmindmap-model",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "localmind-io"
+name = "localmindmap-io"
 version = "1.2.10"
 dependencies = [
- "localmind-layout",
- "localmind-model",
+ "localmindmap-layout",
+ "localmindmap-model",
  "serde_json",
 ]
 
 [[package]]
-name = "localmind-layout"
+name = "localmindmap-layout"
 version = "1.2.10"
 dependencies = [
- "localmind-model",
+ "localmindmap-model",
 ]
 
 [[package]]
-name = "localmind-model"
+name = "localmindmap-model"
 version = "1.2.10"
 dependencies = [
  "serde",

@@ -1,17 +1,17 @@
 # App icon
 
-The Local Mind icon: a central card with branches around it, on the suite's tile.
+The Local Mindmap icon: a central card with branches around it, on the suite's tile.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `localmind.svg` | the master: the full-bleed 512 px tile (corner radius 100) Windows and Linux use as is |
-| `localmind-small.svg` | a three-branch **tree** (not the hub shrunk) for 16, 20, 24 and 32 px only |
-| `localmind-1024.png` | the master at 1024 px, for stores, README and the issue tracker |
+| `localmindmap.svg` | the master: the full-bleed 512 px tile (corner radius 100) Windows and Linux use as is |
+| `localmindmap-small.svg` | a three-branch **tree** (not the hub shrunk) for 16, 20, 24 and 32 px only |
+| `localmindmap-1024.png` | the master at 1024 px, for stores, README and the issue tracker |
 | `hicolor/<size>x<size>/apps/com.localmind.app.png` | the freedesktop icon theme tree (16 to 512 px) and the runtime window icon (256 px) |
 | `hicolor/scalable/apps/com.localmind.app.svg` | the scalable theme entry (a copy of the master) |
-| `localmind.ico` | the Windows icon: 16, 20, 24, 32, 40, 48, 64, 128 and 256 px, packed by `cargo xtask ico` |
+| `localmindmap.ico` | the Windows icon: 16, 20, 24, 32, 40, 48, 64, 128 and 256 px, packed by `cargo xtask ico` |
 
 Every one of them is generated from the two SVGs by `packaging/icons.sh`; the outputs are committed,
 so building and packaging never need `resvg`.
@@ -47,8 +47,8 @@ packaging/icons.sh              # Linux/macOS (needs resvg; uses segoesc.ttf whe
 ```
 
 On Windows the same steps are `resvg -w N -h N --use-font-file C:\Windows\Fonts\segoesc.ttf
-<src> <out.png>` per size (16/20/24/32 from `localmind-small.svg`, the rest from `localmind.svg`)
-and then `cargo xtask ico assets/app-icon/localmind.ico <the 9 PNGs>`.
+<src> <out.png>` per size (16/20/24/32 from `localmindmap-small.svg`, the rest from `localmindmap.svg`)
+and then `cargo xtask ico assets/app-icon/localmindmap.ico <the 9 PNGs>`.
 
 The signature is Segoe Script: without `--use-font-file` (or with fontdb unable to find the family)
 resvg falls back to another face and the icon stops being deterministic.

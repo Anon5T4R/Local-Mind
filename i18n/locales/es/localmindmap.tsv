@@ -1,0 +1,164 @@
+# Español (es) interface catalog for Local Mindmap.
+# Columns, separated by a TAB:  context <TAB> English source text <TAB> translation
+#   context  usually empty. `@plural`, `@id` and `@msg` mean something to the apps; any other
+#            word is a label that tells apart two meanings of the same English.
+#   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns (in any
+#            order), and a trailing "." in one needs one in the other.
+#   @plural  English `one|other`; the translation lists this language's plural forms, `|`-separated.
+#   Lines starting with # and blank lines are ignored. A missing entry shows in English.
+#
+# Clean room: every entry was written from the plain meaning of the English text in ordinary
+# computing vocabulary. No other product's localisation or translated UI was consulted; write new
+# entries the same way.
+
+@id	language.name	Español
+	File	Archivo
+	New map	Nuevo mapa
+	Open…	Abrir…
+	Save	Guardar
+	Save As…	Guardar como…
+	Exit	Salir
+	Edit	Editar
+	Undo	Deshacer
+	Redo	Rehacer
+	Edit text	Editar texto
+	New child	Nuevo hijo
+	New sibling	Nuevo hermano
+	Delete node	Eliminar nodo
+	New node	Nuevo nodo
+	View	Ver
+	Fit to window	Ajustar a la ventana
+	Zoom in	Acercar
+	Zoom out	Alejar
+	Help	Ayuda
+	Check for Updates…	Buscar actualizaciones…
+	About Local Mindmap	Acerca de Local Mindmap
+	An untitled map	Mapa sin título
+	Central idea	Idea central
+	Expand branch	Expandir rama
+	Collapse branch	Contraer rama
+	Note…	Nota…
+	Note	Nota
+	Remove note	Quitar nota
+	Side	Lado
+	Left	Izquierda
+	Right	Derecha
+	Up	Arriba
+	Down	Abajo
+	Automatic	Automático
+	Text size	Tamaño del texto
+	Reset width	Ancho predeterminado
+	Colour	Color
+	None	Ninguno
+	No colour	Sin color
+	Cancel	Cancelar
+	Dismiss	Descartar
+	Nothing open.	Nada abierto.
+	Open a mind map.	Abrir un mapa mental.
+	Save the mind map	Guardar el mapa mental
+	Mind map	Mapa mental
+	Language	Idioma
+	(following the system)	(siguiendo el sistema)
+	version {version}	versión {version}
+	You are on the newest version.	Estás en la versión más reciente.
+	checking for updates failed: {reason}	no se pudo buscar actualizaciones: {reason}
+	Minimize	Minimizar
+	Maximize	Maximizar
+	Close	Cerrar
+	the map could not be opened: {error}	no se pudo abrir el mapa: {error}
+	the map could not be saved: {error}	no se pudo guardar el mapa: {error}
+	the map could not be exported: {error}	no se pudo exportar el mapa: {error}
+	Theme	Tema
+	Dark	Oscuro
+	Settings…	Configuración…
+	Theme: {mode}	Tema: {mode}
+	Export	Exportar
+	Markdown	Markdown
+	HTML	HTML
+	SVG	SVG
+	PNG	PNG
+	Export the map	Exportar el mapa
+	AI	IA
+	Generate map…	Generar mapa…
+	Expand	Expandir
+	Expand deep	Expandir en profundidad
+	Explain	Explicar
+	Rewrite…	Reescribir…
+	Chat	Chat
+	Connections…	Conexiones…
+	AI connections	Conexiones de IA
+	The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something.	La clave queda en el llavero del sistema operativo. El mapa solo sale de este equipo cuando le pides algo al modelo.
+	key saved	clave guardada
+	Remove	Quitar
+	Add connection	Añadir conexión
+	Provider	Proveedor
+	Base URL	URL base
+	Model	Modelo
+	Fetch models	Buscar modelos
+	API key	Clave de API
+	Save key	Guardar clave
+	Generate	Generar
+	Generate map	Generar mapa
+	A topic, or a whole text to organize.	Un tema, o un texto entero para organizar.
+	Depth	Profundidad
+	Breadth	Amplitud
+	Rewrite	Reescribir
+	Apply	Aplicar
+	shorter	más corto
+	more technical	más técnico
+	as a question	como pregunta
+	fix the wording	corregir la redacción
+	Stop	Detener
+	Send	Enviar
+	You	Tú
+	Message the AI…	Mensaje para la IA…
+	Clear conversation	Limpiar conversación
+	As a node	Como nodo
+	As a branch	Como rama
+	No AI connection yet. Open AI > Connections… and add one.	Aún no hay conexión de IA. Abre IA > Conexiones… y añade una.
+	Move to…	Mover a…
+	Move	Mover
+	Choose a new parent	Elige un nuevo padre
+	Keyboard and mouse	Teclado y ratón
+	New child of the selected card	Nuevo hijo de la tarjeta seleccionada
+	Edit the card's text	Editar el texto de la tarjeta
+	Delete the card and its branch	Eliminar la tarjeta y su rama
+	Collapse or expand the branch	Contraer o expandir la rama
+	Move the selection through the map	Mover la selección por el mapa
+	Move the card: reorder, indent, outdent	Mover la tarjeta: reordenar, indentar, desindentar
+	Move a card under another one	Mover una tarjeta debajo de otra
+	Undo and redo	Deshacer y rehacer
+	The card menu: style, note, move, delete	El menú de la tarjeta: estilo, nota, mover, eliminar
+	Pan and zoom the canvas	Mover y ampliar el lienzo
+	Save and open a map	Guardar y abrir un mapa
+	The maps are .tmind files, the same format the original LocalMind wrote.	Los mapas son archivos .tmind, el mismo formato que escribía el LocalMind original.
+	Light	Claro
+	New branch above	Nueva rama arriba
+	New branch below	Nueva rama abajo
+	New branch to the left	Nueva rama a la izquierda
+	New branch to the right	Nueva rama a la derecha
+	Add a branch to a side	Agregar una rama a un lado
+	The model is taking a while…	El modelo está tardando…
+	The map has unsaved changes.	El mapa tiene cambios sin guardar.
+	Don't save	No guardar
+	Expand with AI	Expandir con IA
+	Color branches	Colorear las ramas
+	Add the last answer as a node	Añadir la última respuesta como nodo
+	Ask about the map, or about anything the model can help with.	Pregunta sobre el mapa, o sobre cualquier cosa en la que el modelo pueda ayudar.
+	Empty uses the provider's own address.	Vacío usa la dirección del propio proveedor.
+	No AI connection yet	Aún no hay conexión de IA
+	reading: {label} · {sent} of {total} chars · {turns} of {kept} turns	leyendo: {label} · {sent} de {total} caracteres · {turns} de {kept} turnos
+	Retry	Reintentar
+	Settings	Configuración
+	the map · nodes: {nodes}	el mapa · nodos: {nodes}
+	To the end	Hasta el final
+	Paste the API key first: this provider asks for one.	Pegue primero la clave de API: este proveedor la pide.
+	Choose a provider or type its address first.	Elija un proveedor o escriba su dirección primero.
+	Choose a model first (Fetch models lists them).	Elija un modelo primero (Buscar modelos los lista).
+	Export: {format}	Exportar: {format}
+	Search commands	Buscar comandos
+	Search commands ({shortcut})	Buscar comandos ({shortcut})
+	No command matches.	Ningún comando coincide.
+	Nothing to undo.	Nada que deshacer.
+	Nothing to redo.	Nada que rehacer.
+	Select a card first.	Seleccione una tarjeta primero.

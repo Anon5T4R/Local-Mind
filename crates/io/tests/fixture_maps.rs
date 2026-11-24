@@ -7,9 +7,9 @@
 
 use std::path::{Path, PathBuf};
 
-use localmind_io as map_io;
-use localmind_layout::{ResolvedSide, layout_tree};
-use localmind_model::Side;
+use localmindmap_io as map_io;
+use localmindmap_layout::{ResolvedSide, layout_tree};
+use localmindmap_model::Side;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(name)
@@ -124,7 +124,7 @@ fn a_real_file_from_the_original_app_opens_and_lays_out() {
 /// Opening a file that is not a map says why instead of showing an empty canvas.
 #[test]
 fn a_file_that_is_not_a_map_is_an_error() {
-    let path = std::env::temp_dir().join(format!("localmind-not-a-map-{}.tmind", std::process::id()));
+    let path = std::env::temp_dir().join(format!("localmindmap-not-a-map-{}.tmind", std::process::id()));
     std::fs::write(&path, "<html>não é um mapa</html>").expect("write");
     let error = map_io::load(&path).expect_err("must not parse");
     assert!(matches!(error, map_io::Error::Format(_)), "{error:?}");

@@ -1,4 +1,4 @@
-# UPSTREAM-SYNC — Local Mind
+# UPSTREAM-SYNC — Local Mindmap
 
 O que neste repositório vem de fora, e o que este app faz de diferente da spec.
 
@@ -12,7 +12,7 @@ O que a porta copia é o comportamento e a geometria, não o código: o layout d
 constantes), as regras da árvore do `store.ts`, o formato do `.tmind` do `persistence.ts`, o texto do
 export e as armadilhas que os testes dele fixam. A suíte de testes dele (37 casos em
 `layout.test.ts`/`export.test.ts`, mais os comportamentos do `store.ts` que ele **não** testava)
-virou a suíte deste app em `crates/localmind-*`.
+virou a suíte deste app em `crates/localmindmap-*`.
 
 ## Porta por fases (estado)
 
@@ -69,12 +69,12 @@ deliberada e está detalhada na seção acima.
 
 | Antigo (Electron) | Aqui | Onde |
 |---|---|---|
-| leiaute nas 4 direções, balanceado, faixa por subárvore | igual | `crates/localmind-layout` (21 testes) |
+| leiaute nas 4 direções, balanceado, faixa por subárvore | igual | `crates/localmindmap-layout` (21 testes) |
 | raiz = primeiro nó sem pai; raiz duplicada não trava | igual | layout + io |
 | altura pelo texto; `width`/`fontSize` zero usam o padrão | igual | `node_size` |
 | colapsar esconde a subárvore e mantém o lado | igual | `hidden_ids`/`resolve_sides` |
 | `side` herdado pela subárvore; `up`/`down` só explícitos | igual | `compute_sides` |
-| pan/zoom (roda/pinça no cursor)/"ajustar à janela"/seleção por clique | igual | `apps/localmind/src/canvas.rs` |
+| pan/zoom (roda/pinça no cursor)/"ajustar à janela"/seleção por clique | igual | `apps/localmindmap/src/canvas.rs` |
 | minimapa com retângulo do viewport, clique e arrasto | igual | `canvas.rs` + `minimap_rect` |
 | alça de largura no cartão (arrasto = um passo de desfazer) | igual | `canvas.rs` (`resizing`) |
 
@@ -114,7 +114,7 @@ deliberada e está detalhada na seção acima.
 
 | Antigo (Electron) | Aqui | Onde |
 |---|---|---|
-| gerar mapa de um tema (profundidade/amplitude) | igual | `crates/localmind-ai` + `ai.rs` |
+| gerar mapa de um tema (profundidade/amplitude) | igual | `crates/localmindmap-ai` + `ai.rs` |
 | expandir nó, expandir fundo, explicar | igual | idem |
 | reescrever com instrução + 4 presets (curto, técnico, pergunta, corrigir) | igual | idem |
 | chat com streaming, inserir como nó/ramo, copiar, limpar, parar | igual (parar = descarta a exibição; não aborta o HTTP — divergência declarada) | `ai.rs` |
@@ -125,9 +125,9 @@ deliberada e está detalhada na seção acima.
 
 | Antigo (Electron) | Aqui | Onde |
 |---|---|---|
-| abrir/salvar/salvar como `.tmind` (pretty 2 espaços) | igual | `crates/localmind-io` |
+| abrir/salvar/salvar como `.tmind` (pretty 2 espaços) | igual | `crates/localmindmap-io` |
 | campos desconhecidos preservados no round-trip | igual | `MindNode::extra`/`MindMap::extra` |
-| gravação atômica | igual | `localmind-io` |
+| gravação atômica | igual | `localmindmap-io` |
 | abrir por associação de arquivo e por argumento | igual | `main.rs` + `suite_entry.rs` |
 | — | **acréscimo**: arrastar arquivo para a janela abre o mapa | `main.rs` |
 | reusar a janela existente (`second-instance`) | **divergência**: cada arquivo abre a própria janela | — |

@@ -1,0 +1,164 @@
+# 日本語 (ja) interface catalog for Local Mindmap.
+# Columns, separated by a TAB:  context <TAB> English source text <TAB> translation
+#   context  usually empty. `@plural`, `@id` and `@msg` mean something to the apps; any other
+#            word is a label that tells apart two meanings of the same English.
+#   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns (in any
+#            order), and a trailing "." in one needs one in the other.
+#   @plural  English `one|other`; the translation lists this language's plural forms, `|`-separated.
+#   Lines starting with # and blank lines are ignored. A missing entry shows in English.
+#
+# Clean room: every entry was written from the plain meaning of the English text in ordinary
+# computing vocabulary. No other product's localisation or translated UI was consulted; write new
+# entries the same way.
+
+@id	language.name	日本語
+	File	ファイル
+	New map	新しいマップ
+	Open…	開く…
+	Save	保存
+	Save As…	名前を付けて保存…
+	Exit	終了
+	Edit	編集
+	Undo	元に戻す
+	Redo	やり直す
+	Edit text	テキストを編集
+	New child	子ノードを追加
+	New sibling	兄弟ノードを追加
+	Delete node	ノードを削除
+	New node	新しいノード
+	View	表示
+	Fit to window	ウィンドウに合わせる
+	Zoom in	拡大
+	Zoom out	縮小
+	Help	ヘルプ
+	Check for Updates…	更新を確認…
+	About Local Mindmap	Local Mindmap について
+	An untitled map	無題のマップ
+	Central idea	中心のアイデア
+	Expand branch	ブランチを展開
+	Collapse branch	ブランチを折りたたむ
+	Note…	ノート…
+	Note	ノート
+	Remove note	ノートを削除
+	Side	側
+	Left	左
+	Right	右
+	Up	上
+	Down	下
+	Automatic	自動
+	Text size	文字サイズ
+	Reset width	幅をリセット
+	Colour	色
+	None	なし
+	No colour	色なし
+	Cancel	キャンセル
+	Dismiss	閉じる
+	Nothing open.	何も開いていません。
+	Open a mind map.	マインドマップを開く。
+	Save the mind map	マインドマップを保存
+	Mind map	マインドマップ
+	Language	言語
+	(following the system)	(システムに従う)
+	version {version}	バージョン {version}
+	You are on the newest version.	最新バージョンです。
+	checking for updates failed: {reason}	更新の確認に失敗しました: {reason}
+	Minimize	最小化
+	Maximize	最大化
+	Close	閉じる
+	the map could not be opened: {error}	マップを開けませんでした: {error}
+	the map could not be saved: {error}	マップを保存できませんでした: {error}
+	the map could not be exported: {error}	マップを書き出せませんでした: {error}
+	Theme	テーマ
+	Dark	ダーク
+	Settings…	設定…
+	Theme: {mode}	テーマ: {mode}
+	Export	書き出し
+	Markdown	Markdown
+	HTML	HTML
+	SVG	SVG
+	PNG	PNG
+	Export the map	マップを書き出す
+	AI	AI
+	Generate map…	マップを生成…
+	Expand	展開
+	Expand deep	深く展開
+	Explain	説明
+	Rewrite…	書き換え…
+	Chat	チャット
+	Connections…	接続…
+	AI connections	AI 接続
+	The key stays in the operating system's keychain. The map leaves this computer only when you ask the model something.	キーは OS のキーチェーンに保存されます。モデルに質問したときだけ、マップがこのコンピューターの外に出ます。
+	key saved	キー保存済み
+	Remove	削除
+	Add connection	接続を追加
+	Provider	プロバイダー
+	Base URL	ベース URL
+	Model	モデル
+	Fetch models	モデルを取得
+	API key	API キー
+	Save key	キーを保存
+	Generate	生成
+	Generate map	マップを生成
+	A topic, or a whole text to organize.	テーマ、または整理したい文章全体。
+	Depth	深さ
+	Breadth	広がり
+	Rewrite	書き換え
+	Apply	適用
+	shorter	短く
+	more technical	より技術的に
+	as a question	質問の形に
+	fix the wording	表現を直す
+	Stop	停止
+	Send	送信
+	You	あなた
+	Message the AI…	AI へのメッセージ…
+	Clear conversation	会話を消す
+	As a node	ノードとして
+	As a branch	ブランチとして
+	No AI connection yet. Open AI > Connections… and add one.	AI 接続がまだありません。AI > 接続… を開いて追加してください。
+	Move to…	移動先…
+	Move	移動
+	Choose a new parent	新しい親を選択
+	Keyboard and mouse	キーボードとマウス
+	New child of the selected card	選択中のカードに子を追加
+	Edit the card's text	カードのテキストを編集
+	Delete the card and its branch	カードとそのブランチを削除
+	Collapse or expand the branch	ブランチを折りたたむ／展開
+	Move the selection through the map	選択をマップ内で移動
+	Move the card: reorder, indent, outdent	カードを移動: 並べ替え・インデント・解除
+	Move a card under another one	カードを別のカードの下へ移動
+	Undo and redo	元に戻す・やり直す
+	The card menu: style, note, move, delete	カードメニュー: スタイル・ノート・移動・削除
+	Pan and zoom the canvas	キャンバスの移動とズーム
+	Save and open a map	マップの保存と読み込み
+	The maps are .tmind files, the same format the original LocalMind wrote.	マップは .tmind ファイルです。元の LocalMind と同じ形式です。
+	Light	ライト
+	New branch above	上にブランチを追加
+	New branch below	下にブランチを追加
+	New branch to the left	左にブランチを追加
+	New branch to the right	右にブランチを追加
+	Add a branch to a side	ブランチを横に追加
+	The model is taking a while…	モデルの応答に時間がかかっています…
+	The map has unsaved changes.	マップに未保存の変更があります。
+	Don't save	保存しない
+	Expand with AI	AI で展開
+	Color branches	枝を色分け
+	Add the last answer as a node	最後の回答をノードとして追加
+	Ask about the map, or about anything the model can help with.	マップについてでも、モデルが助けられることなら何でも聞いてください。
+	Empty uses the provider's own address.	空欄ならプロバイダー自身のアドレスを使います。
+	No AI connection yet	AI 接続がまだありません
+	reading: {label} · {sent} of {total} chars · {turns} of {kept} turns	読み込み中: {label} · {total} 文字中 {sent} 文字 · {kept} ターン中 {turns} ターン
+	Retry	再試行
+	Settings	設定
+	the map · nodes: {nodes}	マップ · ノード: {nodes}
+	To the end	最後へ
+	Paste the API key first: this provider asks for one.	先に API キーを貼り付けてください。このプロバイダーには必要です。
+	Choose a provider or type its address first.	先にプロバイダーを選ぶか、アドレスを入力してください。
+	Choose a model first (Fetch models lists them).	先にモデルを選んでください (モデルを取得で一覧表示)。
+	Export: {format}	エクスポート: {format}
+	Search commands	コマンドを検索
+	Search commands ({shortcut})	コマンドを検索 ({shortcut})
+	No command matches.	一致するコマンドはありません。
+	Nothing to undo.	元に戻す操作はありません。
+	Nothing to redo.	やり直す操作はありません。
+	Select a card first.	先にカードを選択してください。

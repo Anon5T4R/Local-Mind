@@ -1,4 +1,4 @@
-# AGENTS.md — Local Mind
+# AGENTS.md — Local Mindmap
 
 App desktop da suíte Local: **Rust puro + egui forkado**, sem webview/React/TS. Mapas mentais com
 layout equilibrado nas quatro direções; o formato é o `.tmind` do **LocalMind** (Electron), que é a
@@ -31,7 +31,7 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
   está frio ou feito, mantém durante iteração ativa); fora dele, `cargo clean` ao terminar. Builds pesados são do CI.
 
 ## Estrutura
-- `apps/localmind` — o app: `main.rs` (args, ícone, janela), `app.rs` (menus, toolbar, About com
+- `apps/localmindmap` — o app: `main.rs` (args, ícone, janela), `app.rs` (menus, toolbar, About com
   update), `canvas.rs` (desenho e interação do mapa, minimapa, alça de largura, "+" nos 4 lados da
   raiz), `edit.rs` (seleção, texto inline, menu do cartão, nota, "Mover para…" com pai/lado, Ajuda,
   teclado e undo), `ai.rs` (as 5 ações, o chat e o strip de status/erro, desenhado antes do canvas;
@@ -41,15 +41,15 @@ Estrutura e regras vêm do padrão craft (`docs/planos/padrao-craft.md` no dev-n
   (Markdown/HTML/SVG), `png.rs` (o PNG pela tesselação do epaint), `theme.rs` (os 7 temas, com o
   claro craft), `doc.rs` (o mapa aberto e o arquivo), `prefs.rs` (idioma e tema), `i18n.rs`,
   `pickers.rs`, `fonts.rs`, `suite_entry.rs`, `build.rs`
-- `crates/localmind-ai` — prompts localizados, o extrator JSON tolerante, as 5 ações + o chat, o
+- `crates/localmindmap-ai` — prompts localizados, o extrator JSON tolerante, as 5 ações + o chat, o
   `outline` (o mapa como contexto do chat, com orçamento) e o `Backend` (o seam para a rede; os
   testes unitários usam um mock, o e2e em `tests/sse_e2e.rs` sobe um servidor SSE em `127.0.0.1` e
   o `tests/real_e2e.rs` (ignorado) fala com um provedor real pelo `ai-test.env`)
-- `crates/localmind-model` — nós, a árvore dos `parentId`, as edições e o histórico (L1,
+- `crates/localmindmap-model` — nós, a árvore dos `parentId`, as edições e o histórico (L1,
   `Class::Standalone`: não depende de crate do workspace)
-- `crates/localmind-layout` — onde cada cartão fica (port do `layout.ts` do app antigo, mesmas
+- `crates/localmindmap-layout` — onde cada cartão fica (port do `layout.ts` do app antigo, mesmas
   constantes; L2)
-- `crates/localmind-io` — leitura/escrita do `.tmind`, gravação atômica (L2)
+- `crates/localmindmap-io` — leitura/escrita do `.tmind`, gravação atômica (L2)
 - `libs/` — forks vendored: `craft-libs` (com `crates/update` espelhado do `local-libs`),
   `egui` 6d518fc, `winit` a517b38, `winprint.rs`, `rustls-rustcrypto`
 - `assets/` — `app-icon/` (dois mestres: normal e small), `craft-fonts/` vendored,
@@ -77,12 +77,12 @@ packaging/linux/package.sh    # AppImage/deb/rpm/tar (Linux)
 - Fontes fora do que o egui embute vivem no craft-fonts (`assets/craft-fonts`).
 
 ## Agent-native (MCP)
-Todo comando do app é alcançável por um agente. O servidor é `localmind mcp` (stdio), sobre o
+Todo comando do app é alcançável por um agente. O servidor é `localmindmap mcp` (stdio), sobre o
 `craft-mcp` da suíte (`libs/craft-libs/crates/mcp`, fonte `local-libs` — espelho, não editar), com
 três ferramentas: `command_list` (o catálogo: id, rótulo, menu, `appOnly` e o schema dos parâmetros),
 `command_run` (um id com `params`) e `command_batch` (passos em ordem, com `"$N.path"` puxando o
-resultado de um passo anterior). Sem cliente MCP: `localmind commands [--search TEXT]` imprime o
-catálogo e `localmind run --script job.json` roda os mesmos passos. O catálogo é
+resultado de um passo anterior). Sem cliente MCP: `localmindmap commands [--search TEXT]` imprime o
+catálogo e `localmindmap run --script job.json` roda os mesmos passos. O catálogo é
 `src/automation/catalogue.rs`: os comandos da paleta (`src/app/commands.rs`) mais `doc.inspect`, o
 lado de leitura do mesmo mapa (os nós e os ids que os comandos de edição recebem). Nada de ação nova.
 
@@ -91,8 +91,8 @@ O mapa é o documento: o headless abre, edita, salva e exporta **pelo próprio e
 `.tmind`), e a janela usa as mesmas funções em `src/live.rs`. O que precisa da janela (viewport,
 diálogos, painel de IA, updater, sair) diz `appOnly` e o headless o recusa apontando o modo live.
 
-Modo live: `localmind --control PORT` abre o canal JSON em `127.0.0.1` e
-`localmind mcp --connect PORT` liga o MCP nele (porta nua = loopback; host que não é loopback é
+Modo live: `localmindmap --control PORT` abre o canal JSON em `127.0.0.1` e
+`localmindmap mcp --connect PORT` liga o MCP nele (porta nua = loopback; host que não é loopback é
 recusado antes de conectar). `--automation-read-root DIR`/`--automation-write-root DIR`
 (repetíveis, `--flag=DIR`) confinam os arquivos que os comandos abrem, salvam e exportam; uma espécie
 sem raiz não concede nada daquele acesso e, sem nenhuma flag, não há confinamento. Com um app

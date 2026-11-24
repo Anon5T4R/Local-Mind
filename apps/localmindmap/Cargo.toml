@@ -1,0 +1,52 @@
+[package]
+name = "localmindmap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Local Mindmap - mind maps with a balanced four-way layout (egui)"
+default-run = "localmindmap"
+
+[lints]
+workspace = true
+
+[dependencies]
+craft-i18n = { workspace = true }
+craft-update = { workspace = true }
+# The chat panel and the connections form of the suite's AI surface.
+craft-ai-ui = { workspace = true }
+craft-window = { workspace = true }
+craft-desktop-theme = { workspace = true }
+craft-icons = { workspace = true }
+craft-palette = { workspace = true }
+# Agent-native plumbing: the stdio MCP server, the script steps and the automation roots the CLI uses.
+craft-mcp = { workspace = true }
+# `clipboard` is a separate eframe feature in 0.37: without it egui-winit simulates an in-process
+# clipboard and cut/copy/paste, RequestPaste and the Wayland PRIMARY path are unavailable.
+eframe = { workspace = true, features = ["default_fonts", "clipboard", "wgpu", "glow", "accesskit", "wayland", "x11"] }
+egui = { workspace = true }
+egui_extras = { workspace = true }
+log = { workspace = true }
+miniz_oxide = { workspace = true }
+pollster = { workspace = true }
+rfd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# the app's own layers (crates/localmindmap-*)
+localmindmap-ai = { workspace = true }
+localmindmap-io = { workspace = true }
+localmindmap-layout = { workspace = true }
+localmindmap-model = { workspace = true }
+# The BYOK client types the connection dialog and the chat speak (`Connection`, `Msg`, `PROVIDERS`).
+local-ai = { workspace = true }
+
+[dev-dependencies]
+# Headless UI tests of the canvas (egui_kittest): the map renders and answers a real click.
+egui_kittest = { workspace = true }
+
+[build-dependencies]
+# Icon + VERSIONINFO for localmindmap.exe; build.rs only uses it when targeting Windows.
+winresource = "0.1"

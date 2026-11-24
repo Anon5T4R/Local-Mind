@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use localmind_model::MindMap;
+use localmindmap_model::MindMap;
 
 /// How much of the map one chat request carries (about 2k tokens of text).
 pub const MAP_BUDGET: usize = 8_000;
@@ -72,7 +72,7 @@ fn one_line(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use localmind_model::MindMap;
+    use localmindmap_model::MindMap;
 
     /// `raiz` with two branches, the first of them with two children.
     fn map() -> MindMap {
@@ -128,7 +128,7 @@ mod tests {
         let b = map.add_child(&a, "b", None);
         // A second node with the same id as `a`, hanging from `b`: without the visited set the
         // walk would keep going a -> b -> a.
-        map.nodes.push(localmind_model::MindNode::new(a.clone(), "a de novo", Some(b.clone())));
+        map.nodes.push(localmindmap_model::MindNode::new(a.clone(), "a de novo", Some(b.clone())));
         let outline = map_outline(&map, MAP_BUDGET);
         assert_eq!(outline.text, "- raiz\n  - a\n    - b\n");
         assert_eq!(outline.nodes, 3);

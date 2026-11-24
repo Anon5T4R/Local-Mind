@@ -1,12 +1,12 @@
 [package]
-name = "localmind-model"
+name = "localmindmap-model"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Local Mind - the mind map itself: nodes, the tree they form, the edits, and the undo history"
+description = "Local Mindmap - the mind map itself: nodes, the tree they form, the edits, and the undo history"
 
 [lints]
 workspace = true

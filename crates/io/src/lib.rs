@@ -5,7 +5,7 @@
 //!
 //! - a save writes a sibling file and renames it over the target, so an interrupted write leaves
 //!   the previous file intact (the user's map is never half written);
-//! - what this build does not understand is not thrown away: [`localmind_model`] carries unknown
+//! - what this build does not understand is not thrown away: [`localmindmap_model`] carries unknown
 //!   fields and writes them back, and this crate only decides layout of the bytes
 //!   (`serde_json::to_string_pretty`, two spaces, no trailing newline: what the other app writes).
 
@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use localmind_model::MindMap;
+use localmindmap_model::MindMap;
 
 /// The extension of a mind map file, without the dot.
 pub const EXTENSION: &str = "tmind";
@@ -113,7 +113,7 @@ pub fn suggested_name(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use localmind_model::Side;
+    use localmindmap_model::Side;
 
     fn sample() -> MindMap {
         let mut map = MindMap::new("Mapa", "Central");
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn save_writes_and_replaces_the_file() {
-        let dir = std::env::temp_dir().join(format!("localmind-io-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("localmindmap-io-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch");
         let path = dir.join("mapa.tmind");
         let map = sample();

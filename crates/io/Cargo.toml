@@ -1,20 +1,20 @@
 [package]
-name = "localmind-io"
+name = "localmindmap-io"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
-description = "Local Mind - reading and writing the user's .tmind files, atomically"
+description = "Local Mindmap - reading and writing the user's .tmind files, atomically"
 
 [lints]
 workspace = true
 
 [dependencies]
-localmind-model = { workspace = true }
+localmindmap-model = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 # The compatibility tests read a real map, lay it out and check nothing was lost on the way.
-localmind-layout = { workspace = true }
+localmindmap-layout = { workspace = true }

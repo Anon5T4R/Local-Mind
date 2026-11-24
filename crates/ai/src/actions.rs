@@ -5,7 +5,7 @@
 //! module turns it into nodes with ids of the app's own.
 
 use local_ai::Msg;
-use localmind_model::{MindMap, MindNode, new_id};
+use localmindmap_model::{MindMap, MindNode, new_id};
 
 use crate::extract::extract_json;
 use crate::prompts::{fill, for_lang};

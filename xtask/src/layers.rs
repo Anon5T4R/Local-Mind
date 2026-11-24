@@ -1,6 +1,6 @@
 //! Dependency layering rules.
 //!
-//! The suite grows every app as layers: `localmind-<name>` crates only ever depend downwards, so
+//! The suite grows every app as layers: `localmindmap-<name>` crates only ever depend downwards, so
 //! the engine can be tested without the UI and no lower layer drags egui in. The rule engine works
 //! on a small, metadata-independent model so it can be unit-tested; `from_metadata` builds that
 //! model from `cargo metadata`.
@@ -38,10 +38,10 @@ impl Class {
     }
 }
 
-/// The layering table. Names are package names without the `localmind-` prefix.
+/// The layering table. Names are package names without the `localmindmap-` prefix.
 pub const TABLE: &[(&str, Class)] = &[
     // L6 apps and tooling
-    ("localmind", Class::Exempt),
+    ("localmindmap", Class::Exempt),
     ("xtask", Class::Exempt),
     // The map itself: the nodes, the tree their parent links form, the edits and the undo history.
     // Depends on no workspace crate at all (serde only), so its rules are tested without a UI.
@@ -64,7 +64,7 @@ pub const INTRA_LAYER_ORDER: &[&[&str]] = &[&["layout", "io"]];
 
 /// The package-name prefix of the app's own crates. A born app renames it with the rest of the
 /// template (`scripts/nascer-app.ps1`).
-pub const PREFIX: &str = "localmind-";
+pub const PREFIX: &str = "localmindmap-";
 
 fn intra_layer_allowed(from: &str, to: &str) -> bool {
     let (from, to) = (short_name(from), short_name(to));
@@ -255,7 +255,7 @@ mod tests {
     /// The table this app ships with: the app, the tooling and the three layers it uses.
     #[test]
     fn the_shipped_table_is_clean() {
-        let g = [c("localmind", &[("egui", Normal, false), ("craft-update", Normal, false)]), c("xtask", &[("serde_json", Normal, false)])];
+        let g = [c("localmindmap", &[("egui", Normal, false), ("craft-update", Normal, false)]), c("xtask", &[("serde_json", Normal, false)])];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
     }
 
@@ -265,23 +265,23 @@ mod tests {
     #[test]
     fn the_apps_own_layers_pass_the_rules() {
         let g = [
-            c("localmind-model", &[("serde", Normal, false)]),
-            c("localmind-layout", &[("localmind-model", Normal, true)]),
-            c("localmind-io", &[("localmind-model", Normal, true), ("localmind-layout", Dev, true)]),
-            c("localmind", &[("localmind-io", Normal, true), ("localmind-layout", Normal, true), ("localmind-model", Normal, true)]),
+            c("localmindmap-model", &[("serde", Normal, false)]),
+            c("localmindmap-layout", &[("localmindmap-model", Normal, true)]),
+            c("localmindmap-io", &[("localmindmap-model", Normal, true), ("localmindmap-layout", Dev, true)]),
+            c("localmindmap", &[("localmindmap-io", Normal, true), ("localmindmap-layout", Normal, true), ("localmindmap-model", Normal, true)]),
         ];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
 
         // The order is declared for the pair, not for the dependency kind: the same edge is legal
         // as a normal dependency too, so the table says what the layers mean, not what cargo does.
-        let normal = [c("localmind-io", &[("localmind-layout", Normal, true)])];
+        let normal = [c("localmindmap-io", &[("localmindmap-layout", Normal, true)])];
         assert!(check(&normal).is_empty(), "{:?}", check(&normal));
     }
 
     #[test]
     fn an_unregistered_workspace_crate_is_flagged() {
-        let v = check(&[c("localmind-mystery", &[])]);
-        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "localmind-mystery"));
+        let v = check(&[c("localmindmap-mystery", &[])]);
+        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "localmindmap-mystery"));
     }
 
     /// The rules a born app relies on, with its own crates registered.
@@ -292,27 +292,27 @@ mod tests {
             ("engine", Class::Layer(3)),
             ("ui", Class::Layer(5)),
             ("testkit", Class::Testkit),
-            ("localmind", Class::Exempt),
+            ("localmindmap", Class::Exempt),
             ("xtask", Class::Exempt),
         ];
         let g = [
-            c("localmind-geom", &[]),
-            c("localmind-engine", &[("localmind-geom", Normal, true)]),
-            c("localmind-ui", &[("localmind-engine", Normal, true), ("egui", Normal, false)]),
-            c("localmind", &[("localmind-ui", Normal, true), ("localmind-testkit", Dev, true)]),
+            c("localmindmap-geom", &[]),
+            c("localmindmap-engine", &[("localmindmap-geom", Normal, true)]),
+            c("localmindmap-ui", &[("localmindmap-engine", Normal, true), ("egui", Normal, false)]),
+            c("localmindmap", &[("localmindmap-ui", Normal, true), ("localmindmap-testkit", Dev, true)]),
         ];
         assert!(check_with(&g, table).is_empty(), "{:?}", check_with(&g, table));
 
         // engine -> ui goes up
-        let up = check_with(&[c("localmind-engine", &[("localmind-ui", Normal, true)])], table);
+        let up = check_with(&[c("localmindmap-engine", &[("localmindmap-ui", Normal, true)])], table);
         assert!(matches!(up[..], [Violation::Upward { from: 3, to: 5, .. }]), "{up:?}");
 
         // a UI toolkit below L5
-        let ui = check_with(&[c("localmind-engine", &[("egui", Normal, false)])], table);
+        let ui = check_with(&[c("localmindmap-engine", &[("egui", Normal, false)])], table);
         assert!(matches!(ui[..], [Violation::UiBelowL5 { layer: 3, .. }]), "{ui:?}");
 
         // test tooling as a normal dependency
-        let tk = check_with(&[c("localmind-engine", &[("localmind-testkit", Normal, true)])], table);
+        let tk = check_with(&[c("localmindmap-engine", &[("localmindmap-testkit", Normal, true)])], table);
         assert!(matches!(tk[..], [Violation::TestkitAsNormalDep { .. }]), "{tk:?}");
     }
 }

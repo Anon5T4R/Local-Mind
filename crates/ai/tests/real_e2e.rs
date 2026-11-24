@@ -4,11 +4,11 @@
 //! outline as the context (what the panel sends). A free model works with the suite's zero-credit
 //! key. The key comes from `OPENROUTER_API_KEY` or from `%USERPROFILE%\Segredos\ai-test.env`
 //! (never printed). Run with
-//! `AI_TEST_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free cargo test -p localmind-ai --test real_e2e -- --ignored --nocapture`.
+//! `AI_TEST_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free cargo test -p localmindmap-ai --test real_e2e -- --ignored --nocapture`.
 
 use local_ai::{App, Connection, Msg};
-use localmind_ai::actions::{self, Request};
-use localmind_model::MindMap;
+use localmindmap_ai::actions::{self, Request};
+use localmindmap_model::MindMap;
 
 fn app() -> App {
     App { id: "LocalMind", url: "https://github.com/Anon5T4R/Local-Mind" }
@@ -63,7 +63,7 @@ fn a_real_model_explains_a_node() {
     assert!(pieces > 1, "the answer streamed in pieces");
     let outcome = actions::interpret(&request, &answer).expect("the answer fits the contract");
     match outcome {
-        localmind_ai::Outcome::Text(text) => assert!(text.split_whitespace().count() > 5, "real content: {text}"),
+        localmindmap_ai::Outcome::Text(text) => assert!(text.split_whitespace().count() > 5, "real content: {text}"),
         other => panic!("an explanation, not nodes: {other:?}"),
     }
 }
@@ -74,7 +74,7 @@ fn a_real_model_explains_a_node() {
 fn a_real_model_chats_about_the_map() {
     let key = real_key();
     let map = map();
-    let outline = localmind_ai::map_outline(&map, localmind_ai::MAP_BUDGET);
+    let outline = localmindmap_ai::map_outline(&map, localmindmap_ai::MAP_BUDGET);
     assert!(outline.text.contains("- Sepse"), "{outline:?}");
     let history = vec![
         Msg::System(actions::chat_system("pt-br")),
