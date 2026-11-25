@@ -1,101 +1,206 @@
-# Local Mind
+<p align="center">
+  <img src="assets/app-icon/hicolor/128x128/apps/com.localmind.app.png" width="96" height="96" alt="Local Mindmap icon">
+</p>
 
-Mapas mentais da suíte Local: **Rust puro + egui forkado**, sem webview, sem React, sem conta e sem
-telemetria. É o port do **LocalMind** (Electron) para o padrão craft — os mapas que você já tem
-continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
+<h1 align="center">Local Mindmap</h1>
 
-## O que funciona
+<p align="center">
+  Mind maps with a balanced layout on all four sides of the central idea, for Windows and Linux. Local files, no account, written in Rust.<br>
+  <a href="#where-it-comes-from">Where it comes from</a> ·
+  <a href="https://github.com/Styx-Studios/Local-Mindmap/releases/latest">Download</a> ·
+  <a href="ROADMAP.md">Roadmap and status</a> ·
+  <a href="#how-it-is-made">How it is made</a>
+</p>
 
-- **Edição completa do mapa**: duplo clique (ou F2) escreve no cartão; Tab cria um filho, Enter um
-  irmão, Delete exclui a subárvore (selecionando o pai), Espaço colapsa, as setas navegam, Alt+setas
-  movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem. O menu do cartão (clique direito) tem estrutura,
-  lado, tamanho do texto, cor, largura, nota, "Mover para…" e excluir; a alça no canto do cartão
-  selecionado muda a largura (um passo de desfazer por arrasto).
-- **Mover um cartão**: o menu do cartão e o menu **Edit** abrem "Mover para…" para escolher o pai
-  numa lista e, quando o pai é a raiz, a **direção** (Esquerda, Direita, Cima, Baixo) na mesma
-  operação. Os **"+" nos quatro lados da raiz** (hot corners, como no app antigo) criam um ramo já
-  naquela direção; o submenu **Side** muda a direção de um filho da raiz. O Ctrl+arrasto foi tentado
-  e **removido** na v1.1.0 por não ser confiável no uso real.
-- **Nota do nó editável** (menu → Nota…), o ponto no cartão e a nota nos exports.
-- **Sete temas nomeados** (o escuro padrão, **Claro** no padrão craft, Natureza, Azul escuro, Verde
-  calmo, Rosa pastel e PunkPrincess) em **View → Theme**, com as paletas do app antigo — a janela, o
-  canvas e o minimapa mudam juntos, e a escolha fica salva.
-- **IA com a sua chave** (menu **AI**): conexão com preset de provedor e chave no keychain do
-  sistema; gerar mapa de um tema ou de um texto, expandir, expandir fundo, explicar, reescrever com
-  instrução, e um chat com streaming que insere a resposta como nó ou ramo. **O chat lê o mapa**:
-  o outline dos nós vai como contexto (com orçamento e o chip mostrando o que foi enviado). Sem
-  motor local: os
-  modelos são os do provedor que você configurar. **Toda falha do provedor aparece num banner com o
-  motivo** (chave inválida, cota esgotada, saldo, rota) e o tempo decorrido fica visível; um stream
-  que para de responder termina em erro, não em espera silenciosa. Provedores como **OpenCode
-  Go/Zen** exigem uma **key pessoal** do workspace Personal: key de time/service-account não carrega
-  o plano e o banner explica isso.
-- **Minimapa** no canto inferior direito, com o viewport marcado e clique/arrasto para navegar.
-- **Export** em Markdown, HTML, SVG e PNG (View/Arquivo → Exportar). O HTML leva as cores do tema;
-  o PNG é o mesmo desenho da tela em 2×.
-- **Layout equilibrado nas quatro direções**: a raiz no centro, os ramos distribuídos à esquerda,
-  à direita, para cima e para baixo, com o lado automático escolhido pelo lado mais leve.
-- **Navegação**: arraste para mover o mapa, roda do mouse (ou pinça) para dar zoom no ponto sob o
-  cursor, "Ajustar à janela" para enquadrar tudo.
-- **Abrir, salvar e salvar como** `.tmind` — o JSON que o LocalMind (Electron) grava, lido e escrito
-  campo a campo: um arquivo com campos que esta versão não conhece é preservado, não reescrito.
-  Nó com `width: 0`, raiz duplicada e nó órfão (as armadilhas que o app antigo documenta) abrem sem
-  perder nada. Gravação atômica: um erro no meio não deixa o mapa pela metade.
-- **Fechar sem perder o trabalho**: com alterações não salvas, fechar interrompe e abre
-  **Salvar / Não salvar / Cancelar**; Salvar grava (ou pede o caminho) e só então fecha, Cancelar
-  mantém a janela aberta.
-- **Abrir por associação de arquivo**, por argumento (`localmind mapa.tmind`) e arrastando o
-  arquivo para a janela.
-- **Interface em português, espanhol, japonês e inglês** (o inglês é a fonte; o idioma segue o
-  sistema e a escolha fica salva).
-- **Janela About com verificação de atualizações** (`craft-update`), **Ajuda** com o teclado e o
-  mouse (menu **Help → Teclado e mouse**), MSI no Windows, AppImage/deb/rpm/tar e pacote Arch no
-  Linux.
+<!-- screenshot: a real map open, root in the centre with branches on all four sides, minimap in the corner; dark and light -->
 
-## O que ainda vem
+Up to version 1.2 this app was called Local Mind; 1.3.0 renamed it to Local Mindmap, and the map files did not change.
 
-A porta do LocalMind Electron está fechada (v1.0.0) e a v1.1.0 trouxe os hot corners (paridade), o
-"mover para…" com lado e a robustez de IA (banner, motivo, timeouts). A paridade item a item está na
-tabela do `UPSTREAM-SYNC.md`, e as diferenças conscientes (IA só remota, nota editável, tema claro,
-SVG/PNG próprios, janela por arquivo) estão lá declaradas. **Ctrl+arrasto** fica como melhoria futura:
-passou no kittest mas não foi confiável no uso real, e os hot corners + o diálogo cobrem o fluxo.
-Daqui em diante são correções de campo e ideias novas, não paridade.
+## What it does
 
-## Formato
+- Edit the map in place: double-click a card or press F2 to type in it, `Tab` for a child, `Enter` for a
+  sibling, `Delete` for the card and its branch (the parent is selected), `Space` to collapse or expand.
+  Arrows move the selection; `Alt` plus an arrow reorders, indents or outdents the selected card.
+  `Ctrl+Z` / `Ctrl+Y` undo and redo.
+- The card menu (right click) has edit text, new child and sibling, collapse, note, "Move to…", the side of a
+  root child, the text size, the colour, the AI actions, colour branches and delete. Dragging the handle of the
+  selected card changes its width, one undo step per drag.
+- **Move to…**, from the card menu or the Edit menu, picks a new parent from a list and, when that parent is
+  the root, the direction (left, right, up, down) in the same step. The `+` buttons around the root create a
+  branch already on that side. Re-parenting by dragging was tried and removed: it passed the UI tests but was
+  not reliable in real use.
+- A note per card (menu, Note…), shown as a dot on the card and written by the exports.
+- AI with your own provider (menu AI): generate a map from a topic or from a text, with a depth and a breadth;
+  expand a card, expand it deep, explain it, or rewrite it with an instruction (four presets); and a chat that
+  reads the map as context and inserts an answer as a node or a branch. `Ctrl+Enter` expands the selected card
+  without going through the menu.
+- Three theme modes in View → Theme: Automatic (follows the system), Light (the suite's neutral palette) and
+  Dark (the palette the old app shipped). A theme saved by an older build falls to the closer of the two.
+- A minimap in the bottom-right corner with the viewport marked; click or drag it to move the view. Drag the
+  canvas to pan, scroll or pinch to zoom at the pointer, and View → Fit to window frames the whole map.
+- The layout is balanced on four sides: the root in the centre, its branches fanning left, right, up and
+  down, and a child without an explicit side goes to the lighter of left and right.
+- Open, Save and Save As for `.tmind`; the dialogs also accept `.json`, since a map is plain JSON. The file
+  association, a path on the command line and a file dropped on the window all open a map.
+- Closing a window with unsaved changes cancels the close and asks: Save (which writes, or asks for a path
+  first, and closes only if the write worked), Don't save, or Cancel.
+- A command palette (`Ctrl+K`) with every menu command, the same commands on the command line
+  (`localmindmap commands`, `localmindmap run --script job.json`), and an MCP server (`localmindmap mcp`) so
+  an AI agent can drive the app.
+- Interface in English, Portuguese (Brazil), Spanish and Japanese; it follows the system language and the
+  choice is kept.
+- An About window that shows the version and checks for updates, and Help → Keyboard and mouse with every
+  gesture the app answers to.
 
-`.tmind` é JSON:
+What is weak or missing is in the [roadmap](ROADMAP.md).
 
-```json
-{
-  "id": "a1b2c3d4",
-  "title": "Meu mapa",
-  "createdAt": 1731600000000,
-  "updatedAt": 1731600000000,
-  "nodes": [
-    { "id": "r00t0000", "text": "Ideia central", "parentId": null },
-    { "id": "br4nch00", "text": "Ramo", "parentId": "r00t0000", "side": "right" }
-  ]
-}
+## What it opens and writes
+
+A map is one `.tmind` file: JSON, with the map's `title`, `createdAt` and `updatedAt` in milliseconds, and a flat list of `nodes`. Every node names its `parentId`, and the root is the first node without one. A node may also carry `collapsed`, `color` (`#rrggbb`), `note`, `width`, `fontSize`, and a `side` (`left`, `right`, `up`, `down`) on the root's direct children.
+
+That is the format LocalMind (the Electron app) wrote, so the maps you already have open as they are. A save writes a sibling file and renames it over the target, so an interrupted save leaves the previous file intact, and fields this build does not know are written back untouched.
+
+- **Markdown**: a nested bullet outline, with the root's note.
+- **HTML**: one self-contained page with the theme's colours.
+- **SVG**: the map as vectors.
+- **PNG**: the same drawing as the window, rendered off-screen at 2×.
+
+## Network and privacy
+
+- Your maps never leave the computer.
+- On start the app asks GitHub whether a newer version exists, and installs it only if you accept. There is
+  no setting to turn the check off yet.
+- AI does nothing until you add a connection: a provider preset (Gemini, OpenAI, Groq, OpenRouter, OpenCode)
+  with your key, which the operating system's keychain holds, or any OpenAI-compatible base URL, which is how
+  a local server such as Ollama or llama.cpp fits in (and needs no key). Only what you send goes to that
+  provider. No model ships with the app, on purpose: the suite is Rust only, and the usual local engine
+  (llama.cpp) is C++.
+- No account, analytics or crash reporting.
+
+Security notes, checkable in the repository:
+
+- The app and its four crates contain no `unsafe` code (the workspace denies it). The layers below do, as in
+  any desktop app: the window system (winit) and the GPU (wgpu).
+- TLS for the update check and for the AI calls is pure Rust (rustls with RustCrypto); `ring`, `aws-lc` and
+  OpenSSL are not in the program.
+- Releases are built by GitHub Actions from a tagged commit with locked dependencies. Every dependency passes
+  `cargo-deny` (advisories, licenses, bans), and none comes from a git URL.
+
+## Where it comes from
+
+Local Mindmap is a Rust rewrite of **LocalMind**, an earlier mind-map app built with Electron, React and
+TypeScript. The Electron code is gone; what it left is the behaviour: the balanced four-way layout and its
+constants, the `.tmind` format, the text of the exports, and the test cases that pinned them. Every deliberate
+difference is recorded in [UPSTREAM-SYNC.md](UPSTREAM-SYNC.md).
+
+Why rewrite instead of keeping Electron: one runtime for the whole suite, a smaller app that starts fast, no
+web engine between your map and the screen, and the same shell, updater and release process as the other Local
+apps. What it cost: no local AI engine (the old app had one, built on llama.cpp, which is C/C++).
+
+There is no upstream project to fork here; the app itself is ours. What comes from elsewhere is the shared
+foundation, vendored in `libs/`: the suite's forks of egui (commit `6d518fc`) and winit (`a517b38`), the
+suite's crates (`craft-libs`) with its updater (the suite's permanent fork of the ArtCraft updater), and
+[craft-fonts](https://github.com/storytold/craft-fonts), whose CJK faces release builds embed. Nothing from
+`storytold/` is read at build, test or release.
+
+## Download
+
+Windows 10/11 (x64): `.msi` installer or portable `.zip`. Linux (x86_64): `.AppImage`, `.deb`, `.rpm`, Arch
+`.pkg.tar.zst` or `.tar.gz`. All in
+[Releases](https://github.com/Styx-Studios/Local-Mindmap/releases/latest). macOS is not published.
+
+Each file is signed with [minisign](https://jedisct1.github.io/minisign/), the same key as every Local app,
+when the release pipeline has the signing key; check that the `.minisig` file is in the release. Each release
+also has a `SHA256SUMS.txt`. To check a file:
+
+```sh
+minisign -Vm <file> -P RWTqN+hTTCFbDCGCA1cEJRLp2FSluxIUiJfqdoAYwkwNNVH5MTYH8qSN
 ```
 
-Cada nó aceita `collapsed`, `color` (`#rrggbb`), `note`, `width`, `fontSize` e `side`
-(`left`/`right`/`up`/`down`, só nos filhos da raiz). A raiz é o **primeiro** nó com `parentId:
-null` — a mesma regra que o layout e os exports usam.
+The public key is also in [packaging/minisign.pub](packaging/minisign.pub).
 
-## Build e verificação
+## How the app is built
 
+| Part | What it holds |
+|---|---|
+| `crates/model` | nodes, the tree their `parentId` links form, the edits and the undo history. No workspace dependency |
+| `crates/layout` | where every card sits: the balanced four-way layout, a port of the old app's geometry with the same constants |
+| `crates/io` | reading and writing `.tmind`, atomic saves, unknown fields kept |
+| `crates/ai` | the prompts, the tolerant JSON extractor, the five actions and the chat |
+| `apps/localmindmap` | the egui app: canvas, editing, menus, exports, the command line and the MCP server |
+
+Nothing below the app crate knows about egui; `cargo xtask layers` enforces the direction. The shared crates
+(window frame, icons, palette, i18n, AI panel, MCP) are mirrored from the suite's source with a hash check in
+CI.
+
+## How it is made
+
+Local Mindmap follows the same rules as every Local app: local files and no account, Rust only (including
+the UI and the cryptography), one self-contained repository per app, governed dependencies, signed releases
+built from a tag, optional AI with your own provider, and MCP so agents can use the app. Most of the code is
+written by AI coding agents (Claude Code and OpenCode) from written plans, reviewed by the maintainer and held
+to the same checks and CI. The reasons for each decision:
+[How we make the Local apps](https://github.com/Styx-Studios/.github/blob/main/profile/README.md#how-we-make-the-local-apps).
+
+## Build from source
+
+Rust 1.95 or newer.
+
+```sh
+git clone https://github.com/Styx-Studios/Local-Mindmap
+cd Local-Mindmap
+cargo run --release -p localmindmap
+cargo xtask ci        # all local checks
 ```
-cargo build --locked          # debug
-CRAFT_FONTS_DIR=assets/craft-fonts cargo build --locked   # com os CJK embutidos (como no CI)
-cargo test --locked
-cargo xtask fmt && cargo xtask assets && cargo xtask layers
-packaging/windows/package.ps1 # MSI + portable (Windows)
-packaging/linux/package.sh    # AppImage/deb/rpm/tar (Linux)
-```
 
-Release: `cargo xtask version set X.Y.Z` **antes** de cada tag → tag `vX.Y.Z` → o Actions builda e
-publica. Nada de `target/` para trás: `cargo clean` depois do uso local.
+## Keyboard and mouse
 
-## Licença
+`Ctrl+K` lists every command. The common ones:
 
-MIT OR Apache-2.0, como o resto da suíte (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`).
+- `Ctrl+N` new map, `Ctrl+O` open, `Ctrl+S` save, `Ctrl+Shift+S` save as.
+- `F2` or double-click edits the card's text; `Tab` new child, `Enter` new sibling, `Delete` the card and its
+  branch, `Space` collapses or expands it.
+- Arrows move the selection; `Alt` plus an arrow reorders, indents or outdents the selected card.
+- `Ctrl+Z` / `Ctrl+Y` undo and redo; `Ctrl+Enter` has the AI expand the selected card.
+- Drag the canvas to pan, and scroll or pinch to zoom at the pointer. Drag the selected card's handle to change
+  its width.
+- The `+` buttons around the root add a branch on that side.
+
+Help → Keyboard and mouse lists the same gestures inside the app.
+
+## AI
+
+AI does nothing until you add a connection: a provider preset (Gemini, OpenAI, Groq, OpenRouter,
+OpenCode), a base URL that also takes any OpenAI-compatible server such as Ollama or llama.cpp, a
+model from the provider's list, and your key, which the operating system's keychain holds.
+
+The AI menu generates a map from a topic or from a whole text, with a depth and a breadth, expands
+the selected card, expands it deep, explains it, and rewrites it with an instruction (four presets,
+or your own); `Ctrl+Enter` expands the card without the menu. Each action becomes one undo step.
+
+The chat reads the map's outline as its context, and its answers stay in the panel as bubbles: you
+insert one as a node or as a branch parsed from the outline. `Enter` sends the message and
+`Shift+Enter` breaks the line. What you send goes only to the provider you chose.
+
+## The Local apps
+
+[Local Word](https://github.com/Anon5T4R/local-office) ·
+[Local Sheets](https://github.com/Anon5T4R/local-sheets) ·
+[Local Slides](https://github.com/Anon5T4R/local-slides) ·
+[Local PDF](https://github.com/Anon5T4R/local-pdf) ·
+[Local Keys](https://github.com/Anon5T4R/Local-Keys) ·
+[Local Image](https://github.com/Anon5T4R/Local-Image) ·
+[Local Photo](https://github.com/Anon5T4R/Local-Photo) ·
+[Local Paint](https://github.com/Anon5T4R/Local-Paint) ·
+[Local Vector](https://github.com/Anon5T4R/Local-Vector) ·
+[Local Player](https://github.com/Anon5T4R/Local-Player) ·
+[Local Notebook](https://github.com/Anon5T4R/Local-Obsidian) ·
+[Local Mindmap](https://github.com/Styx-Studios/Local-Mindmap) ·
+[Local Utils](https://github.com/Anon5T4R/Local-Utils)
+
+## License and credits
+
+MIT or Apache-2.0, at your option ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)); third-party
+notices in [NOTICE](NOTICE) and asset credits in [assets/ATTRIBUTION.md](assets/ATTRIBUTION.md). Release builds
+embed the craft-fonts faces (SIL Open Font License 1.1), and the Windows installer ships their licence texts.
+Other Local apps: [the full list](https://github.com/Styx-Studios).
