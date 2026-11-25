@@ -16,7 +16,7 @@ repository = "https://github.com/Styx-Studios/Local-Mindmap"
 
 [workspace.dependencies]
 # Vendored craft libs (libs/craft-libs). `crates/update` comes from the suite's single source,
-# Anon5T4R/local-libs: the copy here is a mirror, never edited in place.
+# Styx-Studios/local-libs: the copy here is a mirror, never edited in place.
 # Not wired while nothing uses them (an unused workspace dependency is a cargo warning):
 # `craft-ui` (widgets/icons/theme). Add the line back when the first crate needs it.
 # The suite's icons for shared concepts (theme, settings, help, AI…) and the theme button. Source: local-libs.
@@ -42,7 +42,7 @@ localmindmap-layout = { path = "crates/layout" }
 localmindmap-model = { path = "crates/model" }
 
 # BYOK AI shared by the suite: the user's own key, one OpenAI-compatible client for every provider.
-# The copy under `libs/local-ai` is a mirror of `Anon5T4R/local-ai` (same bytes as the siblings
+# The copy under `libs/local-ai` is a mirror of `Styx-Studios/local-ai` (same bytes as the siblings
 # vendor); the crate's TLS is the suite's `rustls-rustcrypto` fork, wired by `[patch.crates-io]`.
 local-ai = { path = "libs/local-ai" }
 

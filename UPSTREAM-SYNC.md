@@ -184,10 +184,10 @@ espelhos dos irmãos (office/pdf/obsidian) precisam do mesmo sync antes de reler
 | `libs/egui` | storytold/egui (fork do egui) | `6d518fc799681571963842f95b55a6b68431b15a` | skill `sync-upstream`; patches da suíte (bidi, scripting, viewport hooks) |
 | `libs/winit` | storytold/winit (fork do winit) | `a517b3846ee8457d84ee4975110bfda6797c44dc` | idem |
 | `libs/craft-libs` | storytold/craft-libs | base `1e6f1278` | idem, **exceto** `crates/update` (abaixo) |
-| `libs/craft-libs/crates/update` | **`Anon5T4R/local-libs`** | `HASHES.update` da fonte | **fora do sync-upstream**: fork permanente consciente. Mudança vai na fonte e replica com `scripts/sync.ps1 -Mode push`; a cópia aqui é espelho e nunca se edita in place |
+| `libs/craft-libs/crates/update` | **`Styx-Studios/local-libs`** | `HASHES.update` da fonte | **fora do sync-upstream**: fork permanente consciente. Mudança vai na fonte e replica com `scripts/sync.ps1 -Mode push`; a cópia aqui é espelho e nunca se edita in place |
 | `libs/winprint.rs` | alampy/winprint.rs (BSD-3) | `417ac3c` | usado por `craft-libs/crates/print` |
 | `libs/rustls-rustcrypto` | fork da suíte | — | o `craft-update` pina este fork (o upstream alpha puxa rustls-webpki 0.102 só por `alg_id`) |
 | `assets/craft-fonts` | storytold/craft-fonts | `b076417b5880bd4154bd22f00695b1d28c6bea83` | build input (`CRAFT_FONTS_DIR`) |
 
-O app nasceu do molde `Anon5T4R/local-app-template` (`nascer-app.ps1`): o script foi usado uma vez e
+O app nasceu do molde `Styx-Studios/local-app-template` (`nascer-app.ps1`): o script foi usado uma vez e
 **removido** do repo, como manda o README do molde.
