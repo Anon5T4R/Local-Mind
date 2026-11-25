@@ -20,12 +20,10 @@ does; the release notes say what changed in each version.
 - **Anthropic** is reachable only through the OpenRouter preset; there is no native adapter.
 - **A very large map** is refused as a single PNG export (the image is capped at 64 million pixels).
 - **The update check** runs at every start with no setting to turn it off.
-- **Interface languages:** English, Portuguese (Brazil), Spanish and Japanese.
 
 ## Planned
 
-Nothing is scheduled. The two items below are the ones already written down as worth doing if they start to
-matter in use:
+Items worth doing if they start to matter in use:
 
 - A reliable drag gesture for re-parenting, keeping "Move to…" as the default.
 - Reusing the running window when a second map is opened.

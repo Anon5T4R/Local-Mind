@@ -14,7 +14,7 @@
 
 <!-- screenshot: a real map open, root in the centre with branches on all four sides, minimap in the corner; dark and light -->
 
-Up to version 1.2 this app was called Local Mind; 1.3.0 renamed it to Local Mindmap, and the map files did not change.
+Before 1.3.0 this app was called Local Mind; 1.3.0 renamed it to Local Mindmap, and the map files did not change.
 
 ## What it does
 
@@ -29,7 +29,7 @@ Up to version 1.2 this app was called Local Mind; 1.3.0 renamed it to Local Mind
   the root, the direction (left, right, up, down) in the same step. The `+` buttons around the root create a
   branch already on that side. Re-parenting by dragging was tried and removed: it passed the UI tests but was
   not reliable in real use.
-- A note per card (menu, Note…), shown as a dot on the card and written by the exports.
+- A note per card (menu, Note…), shown as a dot on the card and written by the Markdown and HTML exports.
 - AI with your own provider (menu AI): generate a map from a topic or from a text, with a depth and a breadth;
   expand a card, expand it deep, explain it, or rewrite it with an instruction (four presets); and a chat that
   reads the map as context and inserts an answer as a node or a branch. `Ctrl+Enter` expands the selected card
@@ -49,8 +49,8 @@ Up to version 1.2 this app was called Local Mind; 1.3.0 renamed it to Local Mind
   an AI agent can drive the app.
 - Interface in English, Portuguese (Brazil), Spanish and Japanese; it follows the system language and the
   choice is kept.
-- An About window that shows the version and checks for updates, and Help → Keyboard and mouse with every
-  gesture the app answers to.
+- An About window that shows the version and checks for updates, and Help → Keyboard and mouse, which lists
+  the main shortcuts.
 
 What is weak or missing is in the [roadmap](ROADMAP.md).
 
@@ -72,9 +72,9 @@ That is the format LocalMind (the Electron app) wrote, so the maps you already h
   no setting to turn the check off yet.
 - AI does nothing until you add a connection: a provider preset (Gemini, OpenAI, Groq, OpenRouter, OpenCode)
   with your key, which the operating system's keychain holds, or any OpenAI-compatible base URL, which is how
-  a local server such as Ollama or llama.cpp fits in (and needs no key). Only what you send goes to that
-  provider. No model ships with the app, on purpose: the suite is Rust only, and the usual local engine
-  (llama.cpp) is C++.
+  a local server such as Ollama or llama.cpp fits in; a base URL on this computer needs no key. Only what you
+  send goes to that provider. No model ships with the app, on purpose: the suite is Rust only, and the usual
+  local engine (llama.cpp) is C++.
 - No account, analytics or crash reporting.
 
 Security notes, checkable in the repository:
@@ -90,22 +90,23 @@ Security notes, checkable in the repository:
 
 Local Mindmap is a Rust rewrite of **LocalMind**, an earlier mind-map app built with Electron, React and
 TypeScript. The Electron code is gone; what it left is the behaviour: the balanced four-way layout and its
-constants, the `.tmind` format, the text of the exports, and the test cases that pinned them. Every deliberate
-difference is recorded in [UPSTREAM-SYNC.md](UPSTREAM-SYNC.md).
+constants, the `.tmind` format, the text of the exports, and the test cases that pinned them. The differences
+found at the port are recorded in [UPSTREAM-SYNC.md](UPSTREAM-SYNC.md).
 
 Why rewrite instead of keeping Electron: one runtime for the whole suite, a smaller app that starts fast, no
 web engine between your map and the screen, and the same shell, updater and release process as the other Local
 apps. What it cost: no local AI engine (the old app had one, built on llama.cpp, which is C/C++).
 
 There is no upstream project to fork here; the app itself is ours. What comes from elsewhere is the shared
-foundation, vendored in `libs/`: the suite's forks of egui (commit `6d518fc`) and winit (`a517b38`), the
-suite's crates (`craft-libs`) with its updater (the suite's permanent fork of the ArtCraft updater), and
-[craft-fonts](https://github.com/storytold/craft-fonts), whose CJK faces release builds embed. Nothing from
+foundation, vendored in `libs/`: the suite's forks of storytold's egui (commit `6d518fc`), winit (`a517b38`)
+and craft-libs, with its updater (the suite's permanent fork of the ArtCraft updater), and
+[craft-fonts](https://github.com/storytold/craft-fonts), whose CJK faces release builds embed; the other
+vendored pieces (`winprint.rs`, `rustls-rustcrypto`) are credited in [NOTICE](NOTICE). Nothing from
 `storytold/` is read at build, test or release.
 
 ## Download
 
-Windows 10/11 (x64): `.msi` installer or portable `.zip`. Linux (x86_64): `.AppImage`, `.deb`, `.rpm`, Arch
+Windows (x64): `.msi` installer or portable `.zip`. Linux (x86_64): `.AppImage`, `.deb`, `.rpm`, Arch
 `.pkg.tar.zst` or `.tar.gz`. All in
 [Releases](https://github.com/Styx-Studios/Local-Mindmap/releases/latest). macOS is not published.
 
@@ -166,13 +167,12 @@ cargo xtask ci        # all local checks
   its width.
 - The `+` buttons around the root add a branch on that side.
 
-Help → Keyboard and mouse lists the same gestures inside the app.
+Help → Keyboard and mouse lists the main shortcuts inside the app.
 
 ## AI
 
-AI does nothing until you add a connection: a provider preset (Gemini, OpenAI, Groq, OpenRouter,
-OpenCode), a base URL that also takes any OpenAI-compatible server such as Ollama or llama.cpp, a
-model from the provider's list, and your key, which the operating system's keychain holds.
+AI does nothing until you add a connection: [Network and privacy](#network-and-privacy) says what one is and
+where the key lives.
 
 The AI menu generates a map from a topic or from a whole text, with a depth and a breadth, expands
 the selected card, expands it deep, explains it, and rewrites it with an instruction (four presets,
@@ -203,4 +203,3 @@ insert one as a node or as a branch parsed from the outline. `Enter` sends the m
 MIT or Apache-2.0, at your option ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)); third-party
 notices in [NOTICE](NOTICE) and asset credits in [assets/ATTRIBUTION.md](assets/ATTRIBUTION.md). Release builds
 embed the craft-fonts faces (SIL Open Font License 1.1), and the Windows installer ships their licence texts.
-Other Local apps: [the full list](https://github.com/Styx-Studios).
