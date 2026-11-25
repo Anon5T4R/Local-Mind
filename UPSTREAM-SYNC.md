@@ -21,8 +21,7 @@ this repository can prove are named with it.
 - Nothing from `C:\Dev\storytold` is read at build, test or release. That folder is only a local
   reference for the `sync-upstream` skill. The mentions of `storytold/*` in code, comments and
   NOTICE are historical reference and licence obligation.
-- The app was born from the suite's mould, `local-app-template`: the first commit is the rename
-  and identity work its `scripts/nascer-app.ps1` does (`ab5f124`).
+- The app was born from the suite's mould, `local-app-template` (first commit `ab5f124`).
 
 ## Releases
 
@@ -72,40 +71,30 @@ The workspace version is the last release (`Cargo.toml`).
 
 ## Declared divergences (not accidents)
 
-- **AI without a local GGUF engine.** The old app loads `.gguf` with `node-llama-cpp` (llama.cpp
-  is C/C++). The suite is Rust only, with no C dependency: AI talks to remote providers through
-  the `local-ai` crate (OpenAI-compatible: Gemini, OpenAI, Groq, OpenRouter, OpenCode Zen/Go,
-  custom), and
-  a local OpenAI-compatible server (Ollama, llama.cpp) fits as a Custom connection. The key lives
+- **AI without a local GGUF engine.** The old app loaded `.gguf` locally (llama.cpp is C/C++); the
+  suite is Rust only, with no C dependency. AI talks to remote providers through the `local-ai`
+  crate (OpenAI-compatible: Gemini, OpenAI, Groq, OpenRouter, OpenCode Zen/Go, custom), and a
+  local OpenAI-compatible server (Ollama, llama.cpp) fits as a Custom connection. The key lives
   in the OS keychain, as in the other apps. A future offline path would be an external process
   (`llama-server`) or a pure binding; neither enters without an explicit decision.
-- **Anthropic** comes in through the OpenRouter preset, not a native adapter: the Anthropic API
-  does not answer on the `/chat/completions` route the suite uses. A small adapter of our own is
-  the only other path in.
+- **Anthropic** comes in through the OpenRouter preset only; the reason is in `ROADMAP.md` §Known
+  gaps and deliberate limits.
 - **The node's note is editable.** The old app had the `note` field but no way to write into it.
   Here it is editable — a requested improvement, not parity.
 - **Re-parenting goes through a dialog, not a drag.** The old app had no way to move a node under
   another parent except undoing and rebuilding the tree. Here the card menu and the **Edit** menu
   open "Move to…", which picks the parent from a list and, when the parent is the root, the
-  **direction** (left, right, up, down) in the same step (`edit.rs:831`). Ctrl+drag was tried in F5
-  and **removed in v1.1.0**: it passed the kittest but the real gesture was not reliable, and a
-  gesture that works 95% of the time is worse than none. The `+` buttons around the root (hot
+  **direction** (left, right, up, down) in the same step (`edit.rs:831`); the gesture was tried
+  and removed in v1.1.0 because it was not reliable in real use. The `+` buttons around the root (hot
   corners) create a branch already on that side (`canvas.rs:155`, `canvas.rs:596`), and the "Side"
   submenu changes the direction of a root child.
-- **Save before close.** The old app closed and lost what was not saved (only a generic browser
-  warning, with no control). Here closing a dirty map **cancels the close** and opens a modal
+- **Save before close.** Here closing a dirty map **cancels the close** and opens a modal
   **Save / Don't save / Cancel** (the Word pattern): Save writes — or asks for a path first — and
   closes only if the write worked; Don't save closes; Cancel keeps the window. A cancelled save-as
   leaves no pending close (`apps/localmindmap/src/close.rs`). An addition, not parity.
 - **Dropping a file on the window** opens the map (the old app only opened from a dialog or argv).
-- **Themes: two palettes, three modes.** The old app had six CSS themes. The port carried them and added the suite's
-  light palette; v1.2.6 dropped the extras (`dc4b95c`). The palettes are the old app's dark one, translated one to one (`--bg`, `--panel`,
-  `--accent`, `--canvas-dots`, `--minimap-*` become `theme::Colors`), and the suite's neutral light
-  one (`apps/localmindmap/src/theme.rs:1-19`). Three modes — Automatic (follows the OS), Light,
-  Dark — pick between them; a preference saved with one of the old names falls to the closer side
-  (`theme.rs:47-55`, `ROADMAP.md` §Known gaps and deliberate limits). The choice lives in the top
-  bar's theme button and in Settings (Edit → Settings…), saved in `prefs.json`
-  (`app.rs:131-142`, `app.rs:596-623`); the old app hid it in its settings window.
+- **Themes:** the old app had six CSS themes; what remains, the modes and where the choice lives
+  are in `ROADMAP.md` §Known gaps and deliberate limits.
 - **Export:** Markdown, HTML, **SVG** and **PNG**. The SVG is ours (vectors, no rasteriser). The
   PNG is rendered from the **same drawing as the window** (an off-screen egui context → epaint
   meshes → a software fill here, with the font atlas), at 2× and compressed with `miniz_oxide`
@@ -120,14 +109,10 @@ The workspace version is the last release (`Cargo.toml`).
   `apps/localmindmap/src/ai.rs:434-439`, `ai.rs:628-632`). The client is the shared `local-ai`
   (`chat_stream`/SSE), the parser is the old app's tolerant extractor (reasoning blocks, fences,
   prose, trailing comma), and the chat panel is the suite's `craft-ai-ui`, with the map sent as its
-  context (`crates/ai/src/outline.rs`). **No local GGUF engine** (llama.cpp is C/C++): a declared
-  limit.
-- **Cancel** in the chat cancels the display and discards the answer; it does not abort the HTTP
-  request (the shared client reads the stream to the end). A declared limit, with the abort hook as
-  a follow-up in the source (`ROADMAP.md` §Known gaps and deliberate limits).
-- **Single instance was not brought over:** today each file opened through the association starts
-  its own window. The old app reused the existing window (`second-instance`); it comes in if it
-  gets in the way (`ROADMAP.md` §Known gaps and deliberate limits).
+  context (`crates/ai/src/outline.rs`). No local GGUF engine: see above.
+- **Cancel** in the chat does not abort the HTTP request: see `ROADMAP.md` §Known gaps and
+  deliberate limits.
+- **Single instance** was not brought over: see `ROADMAP.md` §Known gaps and deliberate limits.
 
 ## Agents: palette, command line, MCP
 
