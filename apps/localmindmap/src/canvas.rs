@@ -6,7 +6,7 @@
 //! hit tests live here too - and they are unit-tested, because a click that lands on the wrong
 //! card is the kind of bug that only shows up in a hand test.
 
-use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
+use egui::{Color32, CornerRadius, FontId, Id, Pos2, Rect, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
 use localmindmap_layout::{Layout, ResolvedSide, font_of, layout_tree, node_size, width_of};
 use localmindmap_model::{MAX_WIDTH, MIN_WIDTH, MindMap, MindNode, Side};
 
@@ -210,6 +210,10 @@ pub struct CanvasOutput {
     pub width_finished: bool,
     /// One of the root's "+" buttons was clicked: add a branch on that side.
     pub hot_corner: Option<Side>,
+    /// The canvas's own widget: having the keyboard, it is still the map that has it.
+    pub id: Id,
+    /// The minimap's widget, for the same reason.
+    pub minimap_id: Id,
 }
 
 impl Default for CanvasOutput {
@@ -224,6 +228,8 @@ impl Default for CanvasOutput {
             width: None,
             width_finished: false,
             hot_corner: None,
+            id: Id::NULL,
+            minimap_id: Id::NULL,
         }
     }
 }
@@ -238,7 +244,7 @@ pub fn show(
     colors: &crate::theme::Colors,
 ) -> CanvasOutput {
     let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-    let mut out = CanvasOutput { rect, ..Default::default() };
+    let mut out = CanvasOutput { rect, id: response.id, ..Default::default() };
 
     let layout = layout_tree(&map.nodes);
     interact(
@@ -269,6 +275,8 @@ pub fn show(
         .show(|ui| ui.label(corner_label(side)));
     }
     minimap(ui, rect, map, &layout, view, colors);
+    // The minimap's id is its own persistent one, the same whoever asks for it.
+    out.minimap_id = ui.make_persistent_id("localmindmap-minimap");
     hover_cursor(ui, &response, map, &layout, view, rect, selected);
     out
 }

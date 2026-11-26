@@ -162,3 +162,5 @@
 	Nothing to undo.	元に戻す操作はありません。
 	Nothing to redo.	やり直す操作はありません。
 	Select a card first.	先にカードを選択してください。
+	Close Settings, About and the command palette	設定、「Local Mindmap について」、コマンドパレットを閉じる
+	The map only receives the keys while nothing open over it has them: click a card to give them back to the map.	マップの上に開いているものが何もキーを持っていない間だけ、マップはキーを受け取ります。カードをクリックすると、キーがマップに戻ります。

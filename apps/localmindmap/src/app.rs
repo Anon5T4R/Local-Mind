@@ -559,6 +559,7 @@ impl LocalApp {
 
     fn about(&mut self, ui: &mut egui::Ui) {
         let mut open = self.about_open;
+        let popup_was_open = egui::Popup::is_any_open(ui.ctx());
         egui::Window::new(tl!("About Local Mindmap"))
             .open(&mut open)
             .collapsible(false)
@@ -590,13 +591,32 @@ impl LocalApp {
                     };
                 });
             });
+        if open && self.escape_closes(ui.ctx(), popup_was_open) {
+            open = false;
+        }
         self.about_open = open;
+    }
+
+    /// Esc closes a window of the shell (egui answers Esc only for `Modal`; these are `Window`s).
+    /// Not while a text field has the keyboard (its Esc is its own), the palette is open (its Esc
+    /// is the palette's, which is drawn after and closes itself), or a popup was open when the
+    /// window started being drawn (`popup_was_open`: the Esc that closes a dropdown inside
+    /// Settings is the dropdown's, and the dropdown has already closed itself by then). Known
+    /// and accepted for now: the Esc that closes the card's menu closes Settings in the same
+    /// frame too.
+    fn escape_closes(&self, ctx: &egui::Context, popup_was_open: bool) -> bool {
+        !popup_was_open
+            && !self.palette.is_open()
+            && !ctx.text_edit_focused()
+            && !egui::Popup::is_any_open(ctx)
+            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
     }
 
     /// Settings: the interface language and the theme (the suite keeps both here; the gear and Edit > Settings…
     /// open it).
     fn settings(&mut self, ui: &mut egui::Ui) {
         let mut open = self.settings_open;
+        let popup_was_open = egui::Popup::is_any_open(ui.ctx());
         let mut mode = self.editor.mode;
         egui::Window::new(tl!("Settings"))
             .open(&mut open)
@@ -618,6 +638,9 @@ impl LocalApp {
             });
         if mode != self.editor.mode {
             self.set_mode(ui.ctx(), mode);
+        }
+        if open && self.escape_closes(ui.ctx(), popup_was_open) {
+            open = false;
         }
         self.settings_open = open;
     }
@@ -734,6 +757,16 @@ impl LocalApp {
     }
 
     #[cfg(test)]
+    pub(crate) fn close_confirming(&self) -> bool {
+        self.close.is_confirming()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn settings_or_about_open(&self) -> bool {
+        self.settings_open || self.about_open
+    }
+
+    #[cfg(test)]
     pub(crate) fn editor_mut(&mut self) -> &mut Editor {
         &mut self.editor
     }
@@ -760,9 +793,10 @@ impl LocalApp {
             }
         }
 
-        // The palette is drawn after the map (below): while it is open, the map must not take a
-        // key the palette's box let go (Tab), so it is told before the map is drawn.
-        self.editor.keys_suspended = self.palette.is_open();
+        // The palette, the Settings and About windows and the unsaved-changes prompt are drawn
+        // after the map (below): while one is open, the map must not take a key (they open with
+        // nothing focused, which the map cannot see), so the map is told before it is drawn.
+        self.editor.keys_suspended = self.palette.is_open() || self.settings_open || self.about_open || self.close.is_confirming();
         egui::CentralPanel::default_margins().show(ui, |ui| self.page(ui));
 
         if self.about_open {

@@ -12,7 +12,7 @@
 //! candidate list, so the composition is tracked from the IME events and Enter never commits while
 //! one is active - the difference between typing Japanese and losing the word being picked.
 
-use egui::{Context, Key, Pos2, Rect, Ui, vec2};
+use egui::{Context, Id, Key, Pos2, Rect, Ui, vec2};
 
 use localmindmap_layout::{ResolvedSide, font_of, layout_tree, node_size, resolve_sides};
 use localmindmap_model::{History, MAX_FONT, MIN_FONT, MindMap, Side};
@@ -70,10 +70,21 @@ pub struct Editor {
     history: History,
     /// A width drag is in progress: its undo step was already recorded.
     resizing: bool,
-    /// A text field had the keyboard when this frame's map area started being drawn.
-    field_had_keyboard: bool,
-    /// Something drawn over the map has the keyboard (the window's command palette): the map's
-    /// own keys stay off until the window clears it. Set by the window every frame, before `ui`.
+    /// A widget other than the map's own (the canvas, the minimap) had the keyboard when this
+    /// frame's map area started being drawn.
+    keyboard_taken_at_start: bool,
+    /// Whether the keyboard was free (nothing focused, or one of the map's own widgets) when the
+    /// last frame ended drawing the map area.
+    keyboard_was_free: bool,
+    /// The map's own widgets, those that may hold the keyboard while the map keeps its keys.
+    map_widgets: [Id; 2],
+    /// The map area of the last frame (the chat panel and the canvas): what is drawn over it
+    /// takes the keyboard away from the map, what is drawn outside it does not.
+    area: Rect,
+    /// Something drawn over the map has the keyboard (the window's palette, Settings, About, the
+    /// unsaved-changes prompt):
+    /// the map's own keys stay off until the window clears it. Set by the window every frame,
+    /// before `ui`.
     pub keys_suspended: bool,
 }
 
@@ -127,7 +138,10 @@ impl Editor {
             rect: Rect::NOTHING,
             history: History::default(),
             resizing: false,
-            field_had_keyboard: false,
+            keyboard_taken_at_start: false,
+            keyboard_was_free: true,
+            map_widgets: [Id::NULL; 2],
+            area: Rect::NOTHING,
             keys_suspended: false,
         }
     }
@@ -458,9 +472,14 @@ impl Editor {
 
     /// The map area: canvas, inline field, keyboard, card menu, note window, and the AI surface.
     pub fn ui(&mut self, ui: &mut Ui) {
-        // Read before any widget runs: Tab, Enter or a click can take the focus out of a field
-        // during this frame, and the key that did it is still the field's (see `field_owns_keyboard`).
-        self.field_had_keyboard = ui.ctx().text_edit_focused();
+        // Read before any widget runs (see `map_owns_keyboard`): who has the keyboard now, and
+        // whether it was free when the last frame ended. With nothing focused, egui's Tab gives
+        // the focus to the first widget drawn (the menu bar, before this) in this same frame: the
+        // keyboard was free, so that Tab is still the map's. From any focused widget, wherever it
+        // is drawn, Tab only moves the focus.
+        let started_elsewhere = ui.ctx().memory(|memory| memory.focused()).is_some_and(|id| self.takes_the_keyboard(ui.ctx(), id));
+        let tab = ui.ctx().input(|i| i.key_pressed(Key::Tab));
+        self.keyboard_taken_at_start = if tab { !self.keyboard_was_free } else { started_elsewhere };
         // The chat takes width from the map area, so it goes first.
         crate::ai::chat_panel(ui, self);
         // The AI error banner and the in-flight status go before the canvas: the canvas takes all
@@ -471,6 +490,7 @@ impl Editor {
         let keys = KeysThisFrame::read(ui.ctx());
         let editing = self.editing.as_ref().map(|e| e.node.clone());
         let out = canvas::show(ui, &self.doc.map, &mut self.view, self.selected.as_deref(), editing.as_deref(), &self.theme.colors());
+        self.map_widgets = [out.id, out.minimap_id];
         self.rect = out.rect;
         self.apply(out);
         // The field goes before the keyboard so the frame that commits is the frame that typed -
@@ -489,6 +509,8 @@ impl Editor {
         self.ai_tick();
         self.ai_tick_models();
         crate::ai::ui(ui, self);
+        self.area = ui.min_rect();
+        self.keyboard_was_free = ui.ctx().memory(|memory| memory.focused()).is_none_or(|id| self.is_map_widget(id));
     }
 
     fn apply(&mut self, out: canvas::CanvasOutput) {
@@ -619,26 +641,53 @@ impl Editor {
         true
     }
 
-    /// Whether a text field owns the keyboard this frame: it has the focus now, or had it when
-    /// the frame started. The second half is for the key that takes the focus out of the field
-    /// (Tab in the chat composer, Enter in a single-line field): egui moves the focus while the
-    /// field handles the key, and the map, drawn after, must not take that same key as its own.
-    pub(crate) fn field_owns_keyboard(&self, ctx: &Context) -> bool {
-        ctx.text_edit_focused() || self.field_had_keyboard
+    /// Whether `id` is one of the map's own widgets: the canvas and the minimap (both take the
+    /// keyboard on a Tab, and it is still the map that has it).
+    fn is_map_widget(&self, id: Id) -> bool {
+        self.map_widgets.contains(&id)
+    }
+
+    /// Whether the widget `id` holding the keyboard takes it away from the map: it is not one of
+    /// the map's own and it is drawn over the map area (the chat panel, the palette, a dialog).
+    /// A widget outside it, such as a button of the toolbar, does not: the keyboard stays the
+    /// map's. A widget whose place is not known does, to be safe.
+    fn takes_the_keyboard(&self, ctx: &Context, id: Id) -> bool {
+        !self.is_map_widget(id) && ctx.read_response(id).is_none_or(|response| response.rect.intersects(self.area))
+    }
+
+    /// Whether the keyboard is the map's this frame. For every key but Tab: the map has it when
+    /// the frame started with no widget holding it, or only one that does not
+    /// [`takes_the_keyboard`](Self::takes_the_keyboard). Any widget drawn over the map area with
+    /// the keyboard - a text field or a button of the chat panel, the palette, a dialog - keeps
+    /// the map mute, whatever its type, and also for the key that takes the focus out of it (Tab
+    /// out of the chat composer, Enter in a single-line field): egui has already moved the focus
+    /// when the map, drawn after, looks. Tab is the one exception: it belongs to any focused
+    /// widget, inside or outside the map area, so the map takes a Tab only in a frame that began
+    /// with the keyboard free (see `ui`).
+    pub(crate) fn map_owns_keyboard(&self) -> bool {
+        !self.keyboard_taken_at_start
     }
 
     /// The keyboard, when no field, menu or window owns it.
     fn keyboard(&mut self, ctx: &Context) {
-        if self.editing.is_some() || self.menu.is_some() || self.note.is_some() {
+        // A dialog of the editor's own is up: the map behind it takes no key. So is a menu of
+        // the bar (a popup, drawn over the map): the menu has the keys while it is open.
+        if self.editing.is_some() || self.menu.is_some() || self.note.is_some() || self.move_to.is_some() || self.help_open {
             return;
         }
-        // A text field has the keyboard (the chat composer, the palette, the Connections fields).
-        // The whole map family stays off, not only Ctrl+Enter: Backspace/Delete would delete the
-        // selected card, Enter would create a sibling, Tab a child, and the arrows, undo and
-        // Ctrl+Enter would all act on the map. With the field's own key covered (Tab takes the
-        // focus out of it mid-frame), the palette over the map suspends the keys outright: it is
-        // drawn after the map, so its box having the focus is not something this frame can see.
-        if self.keys_suspended || self.field_owns_keyboard(ctx) {
+        if egui::Popup::is_any_open(ctx) {
+            return;
+        }
+        if self.ai.settings_open || self.ai.generate_topic.is_some() || self.ai.rewrite.is_some() {
+            return;
+        }
+        // Whatever else has the keyboard is not the map: a text field (the chat composer, the
+        // palette, the Connections fields) or a button the Tab reached on a panel drawn over the
+        // map. The whole map family stays off, not only Ctrl+Enter: Backspace/Delete would delete
+        // the selected card, Enter would create a sibling, Tab a child, and the arrows, undo and
+        // Ctrl+Enter would all act on the map. `keys_suspended` covers what the map cannot see:
+        // the window's palette and windows, drawn after it.
+        if self.keys_suspended || !self.map_owns_keyboard() {
             return;
         }
         let command = modifiers_of(ctx, |m| m.command);
@@ -1035,6 +1084,7 @@ impl Editor {
                         ("Right click", tl!("The card menu: style, note, move, delete")),
                         ("Drag / scroll", tl!("Pan and zoom the canvas")),
                         ("Ctrl + S / Ctrl + O", tl!("Save and open a map")),
+                        ("Esc", tl!("Close Settings, About and the command palette")),
                     ] {
                         ui.label(egui::RichText::new(keys).monospace());
                         ui.label(what);
@@ -1042,6 +1092,7 @@ impl Editor {
                     }
                 });
                 ui.add_space(8.0);
+                ui.label(tl!("The map only receives the keys while nothing open over it has them: click a card to give them back to the map."));
                 ui.label(egui::RichText::new(tl!("The maps are .tmind files, the same format the original LocalMind wrote.")).weak());
             });
         self.help_open = open;

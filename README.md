@@ -8,7 +8,8 @@ continuam abrindo, porque o formato é o mesmo arquivo `.tmind`.
 
 - **Edição completa do mapa**: duplo clique (ou F2) escreve no cartão; Tab cria um filho, Enter um
   irmão, Delete exclui a subárvore (selecionando o pai), Espaço colapsa, as setas navegam, Alt+setas
-  movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem. O menu do cartão (clique direito) tem estrutura,
+  movem/indentam, Ctrl+Z/Ctrl+Y desfazem e refazem — com o teclado no mapa: nenhum painel ou janela
+  aberta com o foco (um clique num cartão devolve o teclado ao mapa). O menu do cartão (clique direito) tem estrutura,
   lado, tamanho do texto, cor, largura, nota, "Mover para…" e excluir; a alça no canto do cartão
   selecionado muda a largura (um passo de desfazer por arrasto).
 - **Mover um cartão**: o menu do cartão e o menu **Edit** abrem "Mover para…" para escolher o pai

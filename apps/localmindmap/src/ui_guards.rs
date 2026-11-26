@@ -43,6 +43,20 @@ fn harness(app: LocalApp, size: egui::Vec2) -> Harness<'static, LocalApp> {
     harness_with(app, size, true)
 }
 
+/// Like [`harness`], for a test that opens a list with names in scripts the test fonts lack (the
+/// language dropdown).
+fn harness_any_script(app: LocalApp, size: egui::Vec2) -> Harness<'static, LocalApp> {
+    Harness::builder().with_accessibility_check(true).allow_missing_glyphs().with_size(size).with_step_dt(1.0 / 60.0).build_ui_state(
+        |ui, app: &mut LocalApp| {
+            egui_extras::install_image_loaders(ui.ctx());
+            crate::i18n::set_language(&app.language());
+            app.theme().apply(ui.ctx());
+            app.draw_for_test(ui);
+        },
+        app,
+    )
+}
+
 /// `named_fields` false turns the unnamed-widget check off (see the connections dialog in
 /// `every_dialog_fits_the_narrow_window`).
 fn harness_with(app: LocalApp, size: egui::Vec2, named_fields: bool) -> Harness<'static, LocalApp> {
@@ -201,6 +215,183 @@ fn the_map_takes_no_key_while_the_palette_is_open() {
     assert!(!harness.state().palette_open(), "Esc closes the palette");
     key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
     assert_eq!(harness.state().editor.doc.map.nodes.len(), before - 1, "with the palette closed, Backspace deletes the selected card");
+}
+
+/// Checks that a key changed nothing on the map: same cards, same selection, no text field.
+fn assert_map_untouched(harness: &Harness<'_, LocalApp>, before: usize, selected: &Option<String>, what: &str) {
+    let editor = &harness.state().editor;
+    assert_eq!(editor.doc.map.nodes.len(), before, "{what}: the map changed behind what is open");
+    assert_eq!(&editor.selected, selected, "{what}: the selection moved behind what is open");
+    assert!(editor.editing.is_none(), "{what}: a text field opened behind what is open");
+}
+
+/// The keys that act on the map, with what each does when it gets there.
+const MAP_KEYS: [(&str, egui::Key); 3] = [("Tab", egui::Key::Tab), ("Down", egui::Key::ArrowDown), ("Backspace", egui::Key::Backspace)];
+
+/// The unsaved-changes prompt (a modal): no key reaches the map behind it.
+#[test]
+fn the_map_takes_no_key_while_the_unsaved_prompt_is_up() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let selected = harness.state().editor.selected.clone();
+    let before = harness.state().editor.doc.map.nodes.len();
+    harness.state_mut().show_for_test(Shell::Unsaved);
+    harness.run_steps(3);
+    assert!(harness.state().close_confirming(), "the prompt is up");
+
+    for (name, pressed) in MAP_KEYS {
+        key(&mut harness, pressed, egui::Modifiers::NONE);
+        assert!(harness.state().close_confirming(), "{name} closed the prompt");
+        assert_map_untouched(&harness, before, &selected, name);
+    }
+}
+
+/// The help window: no key reaches the map behind it.
+#[test]
+fn the_map_takes_no_key_while_the_help_window_is_open() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let selected = harness.state().editor.selected.clone();
+    let before = harness.state().editor.doc.map.nodes.len();
+    harness.state_mut().editor_mut().help_open = true;
+    harness.run_steps(3);
+    assert!(harness.state().editor.help_open, "the help window is open");
+
+    for (name, pressed) in MAP_KEYS {
+        key(&mut harness, pressed, egui::Modifiers::NONE);
+        assert!(harness.state().editor.help_open, "{name} closed the help window");
+        assert_map_untouched(&harness, before, &selected, name);
+    }
+}
+
+/// A menu of the bar open over the map: no key reaches the map behind it.
+#[test]
+fn the_map_takes_no_key_while_a_menu_is_open() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let selected = harness.state().editor.selected.clone();
+    let before = harness.state().editor.doc.map.nodes.len();
+    harness.get_by_label("Edit").click();
+    harness.run_steps(3);
+    assert!(egui::Popup::is_any_open(&harness.ctx), "the menu is an open popup");
+
+    for (name, pressed) in MAP_KEYS {
+        key(&mut harness, pressed, egui::Modifiers::NONE);
+        assert!(egui::Popup::is_any_open(&harness.ctx), "{name} closed the menu");
+        assert_map_untouched(&harness, before, &selected, name);
+    }
+
+    // Esc closes the menu (it is the menu's own key), and the map has its keys again.
+    key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!egui::Popup::is_any_open(&harness.ctx), "Esc closes the menu");
+    harness.run_steps(2);
+    key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), before - 1, "with the menu closed, Backspace deletes the selected card");
+}
+
+/// In Settings, Esc closes the open language dropdown first and the window only on the next Esc.
+#[test]
+fn esc_closes_the_dropdown_first_and_settings_second() {
+    let mut harness = harness_any_script(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    harness.state_mut().show_for_test(Shell::Settings);
+    harness.run_steps(3);
+    assert!(harness.state().settings_or_about_open());
+    harness.get_by_role(Role::ComboBox).click();
+    harness.run_steps(3);
+    assert!(egui::Popup::is_any_open(&harness.ctx), "the language dropdown is open");
+
+    key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!egui::Popup::is_any_open(&harness.ctx), "Esc closes the dropdown");
+    assert!(harness.state().settings_or_about_open(), "Esc that closed the dropdown also closed Settings");
+
+    key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!harness.state().settings_or_about_open(), "the next Esc closes Settings");
+}
+
+/// With the keyboard on a button of the menu bar, Tab moves the focus and does not also create
+/// a card. With nothing focused, Tab is the map's and creates the child.
+#[test]
+fn tab_leaves_a_focused_widget_without_creating_a_card() {
+    let mut on_button = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    on_button.run_steps(3);
+    click_card(&mut on_button, "qSOFA");
+    let before = on_button.state().editor.doc.map.nodes.len();
+    let selected = on_button.state().editor.selected.clone();
+    on_button.get_by_label("File").focus();
+    on_button.run_steps(2);
+    assert!(on_button.ctx.memory(|m| m.focused()).is_some(), "a button of the menu bar has the keyboard");
+
+    key(&mut on_button, egui::Key::Tab, egui::Modifiers::NONE);
+    assert_map_untouched(&on_button, before, &selected, "Tab from a menu bar button");
+
+    // Nothing focused: the same Tab is the map's.
+    let mut fresh = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    fresh.run_steps(3);
+    click_card(&mut fresh, "qSOFA");
+    assert!(fresh.ctx.memory(|m| m.focused()).is_none(), "a click on a card leaves nothing focused");
+    let before = fresh.state().editor.doc.map.nodes.len();
+    key(&mut fresh, egui::Key::Tab, egui::Modifiers::NONE);
+    assert_eq!(fresh.state().editor.doc.map.nodes.len(), before + 1, "Tab with nothing focused creates the child");
+    assert!(fresh.state().editor.editing.is_some(), "and opens it for typing");
+}
+
+/// Settings or About open: no key reaches the map behind the window (not Tab, not the arrows, not
+/// Backspace), and Esc closes the window (egui leaves Esc to `Modal`; these are `Window`s).
+#[test]
+fn the_map_takes_no_key_while_settings_or_about_is_open() {
+    for (name, what) in [("Settings", Shell::Settings), ("About", Shell::About)] {
+        let mut harness = harness(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+        harness.run_steps(3);
+        click_card(&mut harness, "qSOFA");
+        let selected = harness.state().editor.selected.clone();
+        let before = harness.state().editor.doc.map.nodes.len();
+        harness.state_mut().show_for_test(what);
+        harness.run_steps(3);
+        assert!(harness.state().settings_or_about_open(), "{name} is open");
+
+        for (key_name, pressed) in [("Tab", egui::Key::Tab), ("Down", egui::Key::ArrowDown), ("Backspace", egui::Key::Backspace)] {
+            key(&mut harness, pressed, egui::Modifiers::NONE);
+            assert!(harness.state().settings_or_about_open(), "{name}: {key_name} closed the window");
+            let editor = &harness.state().editor;
+            assert_eq!(editor.doc.map.nodes.len(), before, "{name}: {key_name} changed the map behind the window");
+            assert_eq!(editor.selected, selected, "{name}: {key_name} moved the selection behind the window");
+            assert!(editor.editing.is_none(), "{name}: {key_name} opened a text field behind the window");
+        }
+
+        key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+        assert!(!harness.state().settings_or_about_open(), "{name}: Esc does not close the window");
+        assert!(harness.state().editor.editing.is_none(), "{name}: Esc reached the map");
+        // The window gone, the map has its keys again.
+        key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+        assert_eq!(harness.state().editor.doc.map.nodes.len(), before - 1, "{name} closed: Backspace deletes the selected card again");
+    }
+}
+
+/// A widget with the keyboard outside the map area does not take it away from the map: with the
+/// focus on a button of the menu bar, Delete still acts on the selected card. (A click on a
+/// toolbar button leaves nothing focused; it is here to keep it so.)
+#[test]
+fn a_widget_outside_the_map_area_does_not_mute_the_map() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let before = harness.state().editor.doc.map.nodes.len();
+    // The window is in English: the toolbar's label is looked up by its text.
+    harness.get_by_label("Fit to window").click();
+    harness.run_steps(3);
+    assert!(harness.ctx.memory(|m| m.focused()).is_none(), "a toolbar click leaves the keyboard free");
+
+    harness.get_by_label("File").focus();
+    harness.run_steps(2);
+    assert!(harness.ctx.memory(|m| m.focused()).is_some(), "a button of the menu bar has the keyboard");
+
+    key(&mut harness, egui::Key::Delete, egui::Modifiers::NONE);
+
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), before - 1, "Delete with the menu bar focused did not reach the map");
 }
 
 /// The shell's own windows and the palette, over the open map.

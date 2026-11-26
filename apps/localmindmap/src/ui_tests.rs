@@ -891,8 +891,8 @@ fn backspace_in_the_chat_composer_does_not_delete_the_selected_card() {
 }
 
 /// Tab (and Shift+Tab) typed in the composer moves the keyboard out of the field, but is not the
-/// map's Tab: no card is created and no text field opens. The keyboard then belongs to the map
-/// again: the next key acts on it.
+/// map's Tab: no card is created and no text field opens. The keyboard lands on a button of the
+/// panel, so it is still not the map's.
 #[test]
 fn tab_in_the_chat_composer_does_not_create_a_card() {
     for (tab, modifiers) in [("Tab", egui::Modifiers::NONE), ("Shift+Tab", egui::Modifiers::SHIFT)] {
@@ -916,10 +916,58 @@ fn tab_in_the_chat_composer_does_not_create_a_card() {
         let focused = harness.root().query_by(|n| n.is_focused()).map(|n| n.accesskit_node().role());
         assert_eq!(focused, Some(egui::accesskit::Role::Button), "{tab} moved the focus to a button of the panel");
 
-        // The map is not left mute: with the keyboard back on it, Backspace deletes the selected card.
+        // The keyboard is on a button of the panel now, so it is still not the map's: Backspace
+        // here changes nothing. A click on a card is what hands the keyboard back (the next test).
         key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
-        assert_eq!(harness.state().doc.map.nodes.len(), before - 1, "after {tab} in the composer, the map did not take the next key");
-        assert!(harness.state().doc.map.node("l4ct4t03").is_none(), "the selected card is the one Backspace deleted");
+        assert_eq!(
+            harness.state().doc.map.nodes.len(),
+            before,
+            "after {tab} in the composer, the map took a key while a panel button has the keyboard"
+        );
+    }
+}
+
+/// After Tab out of the composer (the keyboard on a panel button), a click on a card hands the
+/// keyboard back to the map.
+#[test]
+fn a_click_on_a_card_hands_the_keyboard_back_to_the_map() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    let before = harness.state().doc.map.nodes.len();
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+
+    click_card(&mut harness, "l4ct4t03");
+    assert!(!harness.ctx.text_edit_focused(), "the click on the card took the keyboard out of the field");
+    key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+
+    assert_eq!(harness.state().doc.map.nodes.len(), before - 1, "after the click, the map did not take the key");
+}
+
+/// Tab, Shift+Tab and the arrows typed while a button of the chat panel has the keyboard (Send,
+/// Settings, Clear conversation) are not the map's: no card is created and the selection stays.
+/// The map only has the keys when no widget has them.
+#[test]
+fn keys_on_the_chat_panel_buttons_do_not_reach_the_map() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    let before = harness.state().doc.map.nodes.len();
+    // Tab out of the composer: the focus lands on the panel's "Send" button.
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+    let focused = harness.root().query_by(|n| n.is_focused()).and_then(|n| n.accesskit_node().label());
+    assert_eq!(focused.as_deref(), Some("Send"), "the focus is on a button of the panel");
+    assert!(!harness.ctx.text_edit_focused());
+
+    for (name, pressed, modifiers) in [
+        ("Shift+Tab", egui::Key::Tab, egui::Modifiers::SHIFT),
+        ("Tab", egui::Key::Tab, egui::Modifiers::NONE),
+        ("Down", egui::Key::ArrowDown, egui::Modifiers::NONE),
+        ("Right", egui::Key::ArrowRight, egui::Modifiers::NONE),
+        ("Backspace", egui::Key::Backspace, egui::Modifiers::NONE),
+    ] {
+        key(&mut harness, pressed, modifiers);
+        assert!(harness.state().editing.is_none(), "{name} on a panel button opened a text field on the map");
+        assert_eq!(harness.state().doc.map.nodes.len(), before, "{name} on a panel button changed the map");
+        assert_eq!(harness.state().selected.as_deref(), Some("l4ct4t03"), "{name} on a panel button moved the selection");
     }
 }
 
