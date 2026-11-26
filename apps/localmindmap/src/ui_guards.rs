@@ -146,6 +146,31 @@ fn click_card(harness: &mut Harness<'_, LocalApp>, text: &str) {
         let size = localmindmap_layout::node_size(node);
         crate::canvas::card_rect(&editor.view, editor.rect, at, (size.w, size.h)).center()
     };
+    click_at(harness, pos);
+}
+
+/// A right click of the mouse on the card of the node whose text is `text`.
+fn right_click_card(harness: &mut Harness<'_, LocalApp>, text: &str) {
+    let pos = {
+        let editor = &harness.state().editor;
+        let node = editor.doc.map.nodes.iter().find(|n| n.text == text).expect("the node exists");
+        let layout = localmindmap_layout::layout_tree(&editor.doc.map.nodes);
+        let at = *layout.positions.get(&node.id).expect("the node is placed");
+        let size = localmindmap_layout::node_size(node);
+        crate::canvas::card_rect(&editor.view, editor.rect, at, (size.w, size.h)).center()
+    };
+    for event in [
+        egui::Event::PointerMoved(pos),
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: true, modifiers: egui::Modifiers::default() },
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed: false, modifiers: egui::Modifiers::default() },
+    ] {
+        harness.event(event);
+    }
+    harness.run_steps(3);
+}
+
+/// A click of the primary button at `pos` (client coordinates).
+fn click_at(harness: &mut Harness<'_, LocalApp>, pos: egui::Pos2) {
     harness.event(egui::Event::PointerMoved(pos));
     harness.run_steps(1);
     for pressed in [true, false] {
@@ -312,8 +337,9 @@ fn esc_closes_the_dropdown_first_and_settings_second() {
     assert!(!harness.state().settings_or_about_open(), "the next Esc closes Settings");
 }
 
-/// With the keyboard on a button of the menu bar, Tab moves the focus and does not also create
-/// a card. With nothing focused, Tab is the map's and creates the child.
+/// With the keyboard on a button of the menu bar, Tab moves the focus and does not also create a
+/// card. With the keyboard on the map's side - the canvas after a click on a card, or nothing
+/// focused at all - Tab is the map's and creates the child.
 #[test]
 fn tab_leaves_a_focused_widget_without_creating_a_card() {
     let mut on_button = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
@@ -328,15 +354,90 @@ fn tab_leaves_a_focused_widget_without_creating_a_card() {
     key(&mut on_button, egui::Key::Tab, egui::Modifiers::NONE);
     assert_map_untouched(&on_button, before, &selected, "Tab from a menu bar button");
 
-    // Nothing focused: the same Tab is the map's.
-    let mut fresh = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
-    fresh.run_steps(3);
-    click_card(&mut fresh, "qSOFA");
-    assert!(fresh.ctx.memory(|m| m.focused()).is_none(), "a click on a card leaves nothing focused");
-    let before = fresh.state().editor.doc.map.nodes.len();
-    key(&mut fresh, egui::Key::Tab, egui::Modifiers::NONE);
-    assert_eq!(fresh.state().editor.doc.map.nodes.len(), before + 1, "Tab with nothing focused creates the child");
-    assert!(fresh.state().editor.editing.is_some(), "and opens it for typing");
+    // The canvas holds the keyboard (the click on the card gave it): Tab is the map's.
+    let mut on_canvas = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    on_canvas.run_steps(3);
+    click_card(&mut on_canvas, "qSOFA");
+    assert!(on_canvas.ctx.memory(|m| m.focused()).is_some(), "the click left the keyboard on the canvas");
+    let before = on_canvas.state().editor.doc.map.nodes.len();
+    key(&mut on_canvas, egui::Key::Tab, egui::Modifiers::NONE);
+    assert_eq!(on_canvas.state().editor.doc.map.nodes.len(), before + 1, "Tab with the canvas holding the keyboard creates the child");
+    assert!(on_canvas.state().editor.editing.is_some(), "and opens it for typing");
+
+    // Nothing focused at all (no click yet): the same Tab is the map's.
+    let mut nothing = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    nothing.run_steps(3);
+    assert!(nothing.ctx.memory(|m| m.focused()).is_none(), "nothing has the keyboard");
+    let before = nothing.state().editor.doc.map.nodes.len();
+    key(&mut nothing, egui::Key::Tab, egui::Modifiers::NONE);
+    assert_eq!(nothing.state().editor.doc.map.nodes.len(), before + 1, "Tab with nothing focused creates the child");
+    assert!(nothing.state().editor.editing.is_some(), "and opens it for typing");
+}
+
+/// The update prompt (found at start, or by a check): no key reaches the map behind it.
+#[test]
+fn the_map_takes_no_key_while_the_update_prompt_is_up() {
+    let mut app = app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light);
+    app.updater_hermetic();
+    let mut harness = harness(app, MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let selected = harness.state().editor.selected.clone();
+    let before = harness.state().editor.doc.map.nodes.len();
+    harness.state_mut().offer_update_for_test();
+    harness.run_steps(3);
+    assert!(harness.state().update_prompt_open(), "the update prompt is up");
+
+    for (name, pressed) in MAP_KEYS {
+        key(&mut harness, pressed, egui::Modifiers::NONE);
+        assert!(harness.state().update_prompt_open(), "{name} closed the update prompt");
+        assert_map_untouched(&harness, before, &selected, name);
+    }
+}
+
+/// A click on a card, or on an empty stretch of the map, asks for the canvas to hold the keyboard,
+/// whatever had it before (a button of the bar): Tab right after is the map's and creates the
+/// child. (The arrow is no indicator here: from this card of the fixture it has nowhere to go.)
+#[test]
+fn a_click_on_the_map_makes_the_canvas_hold_the_keyboard() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    harness.get_by_label("File").focus();
+    harness.run_steps(2);
+    assert!(harness.ctx.memory(|m| m.focused()).is_some(), "a button of the menu bar has the keyboard");
+
+    click_card(&mut harness, "qSOFA");
+    let canvas = harness.state().editor.map_widgets()[0];
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "the click on the card did not give the canvas the keyboard");
+    let before = harness.state().editor.doc.map.nodes.len();
+
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), before + 1, "Tab after the click did not create a child");
+
+    // The bar again, then an empty stretch of the map: the canvas takes the keyboard too.
+    harness.get_by_label("File").focus();
+    harness.run_steps(2);
+    let empty = {
+        let editor = &harness.state().editor;
+        editor.rect.left_top() + egui::vec2(editor.rect.width() * 0.5, editor.rect.height() * 0.12)
+    };
+    click_at(&mut harness, empty);
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "the click on the empty map did not give the canvas the keyboard");
+    assert!(harness.state().editor.selected.is_none(), "a click on the empty map clears the selection");
+
+    // Esc still clears the focus (the canvas's focus filter leaves Escape to egui).
+    key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(harness.ctx.memory(|m| m.focused()).is_none(), "Esc did not clear the keyboard");
+
+    // The minimap too: a click on it is the user pointing at the map.
+    harness.get_by_label("File").focus();
+    harness.run_steps(2);
+    let minimap = {
+        let editor = &harness.state().editor;
+        crate::canvas::minimap_rect(editor.rect).expect("the window is big enough for a minimap")
+    };
+    click_at(&mut harness, minimap.center());
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "a click on the minimap did not give the canvas the keyboard");
 }
 
 /// Settings or About open: no key reaches the map behind the window (not Tab, not the arrows, not
@@ -371,7 +472,24 @@ fn the_map_takes_no_key_while_settings_or_about_is_open() {
     }
 }
 
-/// A widget with the keyboard outside the map area does not take it away from the map: with the
+/// A right click on a card, like a left one, is the user pointing at the map: the canvas takes
+/// the keyboard (the card's menu opens on top of it).
+#[test]
+fn a_right_click_on_a_card_makes_the_canvas_hold_the_keyboard() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "en", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    harness.get_by_label("File").focus();
+    harness.run_steps(2);
+    assert!(harness.ctx.memory(|m| m.focused()).is_some(), "a button of the menu bar has the keyboard");
+
+    right_click_card(&mut harness, "qSOFA");
+
+    let canvas = harness.state().editor.map_widgets()[0];
+    assert!(harness.state().editor.menu.is_some(), "the right click opens the card's menu");
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "the right click did not give the canvas the keyboard");
+}
+
+/// The widget with the keyboard outside the map area does not take it away from the map: with the
 /// focus on a button of the menu bar, Delete still acts on the selected card. (A click on a
 /// toolbar button leaves nothing focused; it is here to keep it so.)
 #[test]

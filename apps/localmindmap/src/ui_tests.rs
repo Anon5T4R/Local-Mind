@@ -873,6 +873,111 @@ fn ctrl_enter_in_the_chat_composer_does_not_also_run_the_map_shortcut() {
     assert!(harness.state().ai.error.is_none(), "the map's Expand ran under the chat: {:?}", harness.state().ai.error);
 }
 
+/// With the canvas holding the keyboard (after a click on a card) and the chat open beside it,
+/// the arrows move the selection and nothing else: egui's own arrow navigation must not take the
+/// focus off the canvas onto a neighbour (the composer is one), or the next key would go there.
+#[test]
+fn arrows_keep_the_keyboard_on_the_canvas() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    // A card on the left: with the chat open, the right-hand cards sit under the panel.
+    click_card(&mut harness, "m0n1t0r4");
+    assert_eq!(harness.state().selected.as_deref(), Some("m0n1t0r4"), "the click selects the card");
+    let canvas = harness.state().canvas_id();
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "the click gives the canvas the keyboard");
+    let first = harness.state().selected.clone();
+    let before = harness.state().doc.map.nodes.len();
+
+    let mut moved = false;
+    for key_code in
+        [egui::Key::ArrowRight, egui::Key::ArrowDown, egui::Key::ArrowLeft, egui::Key::ArrowUp, egui::Key::ArrowDown, egui::Key::ArrowRight]
+    {
+        key(&mut harness, key_code, egui::Modifiers::NONE);
+        assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "{key_code:?} took the focus off the canvas");
+        moved |= harness.state().selected != first;
+    }
+    assert!(moved, "the arrows moved the selection through the map");
+
+    // The keyboard is still the map's: Tab is the map's Tab, and the composer saw nothing.
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+    assert!(harness.state().editing.is_some(), "Tab after the arrows did not reach the map");
+    assert_eq!(harness.state().doc.map.nodes.len(), before + 1, "Tab after the arrows did not create the child");
+    assert_eq!(
+        harness.get_by_role(egui::accesskit::Role::MultilineTextInput).value().as_deref(),
+        Some("uma pergunta"),
+        "a key typed after the arrows reached the composer"
+    );
+}
+
+/// The canvas's widget id does not depend on what is drawn before it (the chat panel, the AI
+/// status strip): the map tells its canvas apart by that id from one frame to the next.
+#[test]
+fn the_canvas_id_does_not_move_with_what_is_drawn_before_it() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    let closed = harness.state().canvas_id();
+
+    harness.state_mut().ai.chat_open = true;
+    harness.run_steps(3);
+    assert_eq!(harness.state().canvas_id(), closed, "opening the chat moved the canvas id");
+
+    harness.state_mut().ai.error = Some("algo falhou".into());
+    harness.run_steps(3);
+    assert_eq!(harness.state().canvas_id(), closed, "the AI status strip moved the canvas id");
+}
+
+/// An arrow pressed in the very frame after the click that gave the canvas the keyboard (before
+/// the canvas had time to lock the arrows to itself) still leaves the focus on the canvas.
+#[test]
+fn an_arrow_right_after_the_click_stays_on_the_canvas() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    let pos = card_center(&harness, "m0n1t0r4");
+    let canvas = harness.state().canvas_id();
+    // The click, one frame per event, then the arrow on the next frame: no idle frame between.
+    for event in [
+        egui::Event::PointerMoved(pos),
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::default() },
+        egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::default() },
+    ] {
+        push(&mut harness, event);
+        harness.run_steps(1);
+    }
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "the click gives the canvas the keyboard");
+
+    push(
+        &mut harness,
+        egui::Event::Key { key: egui::Key::ArrowRight, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE },
+    );
+    harness.run_steps(1);
+    harness.run_steps(2);
+    assert_eq!(harness.ctx.memory(|m| m.focused()), Some(canvas), "an arrow in the frame after the click took the focus off the canvas");
+}
+
+/// A double click on a card opens its text field with the keyboard in it: the click gave the
+/// canvas the keyboard, the field takes it from the canvas, and what is typed goes into the card.
+/// (With the chat open: its composer is the other text field on screen and must stay empty.)
+#[test]
+fn a_double_click_puts_the_keyboard_in_the_inline_field() {
+    let mut harness = harness();
+    harness.run_steps(3);
+    harness.state_mut().ai.chat_open = true;
+    harness.run_steps(3);
+    double_click_card(&mut harness, "m0n1t0r4");
+
+    let editing = harness.state().editing.as_ref().map(|e| e.node.clone()).expect("the double click opens the text field");
+    assert_eq!(editing, "m0n1t0r4");
+    assert!(harness.ctx.text_edit_focused(), "the inline field has the keyboard");
+    text(&mut harness, "x");
+
+    // The draft is what the field holds; it becomes the card's text when the edit is committed.
+    let draft = harness.state().editing.as_ref().map(|e| e.draft.clone()).expect("the field is still open");
+    assert_eq!(draft, "x", "what was typed did not go into the inline field");
+    let mut typed: Vec<String> = harness.get_all_by_role(egui::accesskit::Role::MultilineTextInput).map(|n| n.value().unwrap_or_default()).collect();
+    typed.sort();
+    assert_eq!(typed, ["", "x"], "the typed text went into the inline field; the composer stayed empty");
+}
+
 /// Backspace typed in the composer erases a character of the question, never the selected card:
 /// with the keyboard in a field, the whole map family (Ctrl+Enter, Backspace/Delete, Enter, the
 /// arrows, Tab) stays off.

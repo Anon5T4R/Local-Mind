@@ -214,6 +214,8 @@ pub struct CanvasOutput {
     pub id: Id,
     /// The minimap's widget, for the same reason.
     pub minimap_id: Id,
+    /// The user just pointed at the minimap: a click, or the frame a drag on it starts.
+    pub minimap_interacted: bool,
 }
 
 impl Default for CanvasOutput {
@@ -230,6 +232,7 @@ impl Default for CanvasOutput {
             hot_corner: None,
             id: Id::NULL,
             minimap_id: Id::NULL,
+            minimap_interacted: false,
         }
     }
 }
@@ -243,7 +246,22 @@ pub fn show(
     editing: Option<&str>,
     colors: &crate::theme::Colors,
 ) -> CanvasOutput {
-    let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+    // The canvas under its own persistent id: an automatic one would move whenever what is drawn
+    // before it changes (the chat panel, the AI status strip, the menus), and the map tells its
+    // canvas apart by this id from one frame to the next. This is `allocate_exact_size` with the
+    // id swapped: the space is allocated, then the same rect is interacted with under our id.
+    let desired = ui.available_size();
+    let (_automatic, rect) = ui.allocate_space(desired);
+    let id = ui.make_persistent_id("localmindmap-canvas");
+    let mut response = ui.interact(rect, id, Sense::click_and_drag());
+    response.set_intrinsic_size(desired);
+    // While the canvas holds the keyboard, the arrows are the map's (they move the selection):
+    // egui must not use them to move the focus onto a neighbour (a button of the chat panel, the
+    // composer). Tab and Escape are left to egui: Tab goes on to the next widget, Escape clears.
+    if response.has_focus() {
+        let filter = egui::EventFilter { horizontal_arrows: true, vertical_arrows: true, ..Default::default() };
+        ui.memory_mut(|memory| memory.set_focus_lock_filter(response.id, filter));
+    }
     let mut out = CanvasOutput { rect, id: response.id, ..Default::default() };
 
     let layout = layout_tree(&map.nodes);
@@ -274,7 +292,7 @@ pub fn show(
         )
         .show(|ui| ui.label(corner_label(side)));
     }
-    minimap(ui, rect, map, &layout, view, colors);
+    out.minimap_interacted = minimap(ui, rect, map, &layout, view, colors);
     // The minimap's id is its own persistent one, the same whoever asks for it.
     out.minimap_id = ui.make_persistent_id("localmindmap-minimap");
     hover_cursor(ui, &response, map, &layout, view, rect, selected);
@@ -554,10 +572,12 @@ impl MinimapFit {
     }
 }
 
-/// The minimap: the whole map, the viewport and a click/drag that moves the view.
-fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut CanvasView, colors: &crate::theme::Colors) {
-    let Some(rect) = minimap_rect(canvas) else { return };
-    let Some((map_min, map_size)) = layout.bounds(&map.nodes) else { return };
+/// The minimap: the whole map, the viewport and a click/drag that moves the view. Returns whether
+/// the user just pointed at it: a click, or the frame a drag on it starts (not every frame of
+/// the drag).
+fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut CanvasView, colors: &crate::theme::Colors) -> bool {
+    let Some(rect) = minimap_rect(canvas) else { return false };
+    let Some((map_min, map_size)) = layout.bounds(&map.nodes) else { return false };
     let map_rect = Rect::from_min_size(pos2(map_min.x, map_min.y), vec2(map_size.w, map_size.h));
     let viewport = world_view(view, canvas);
     let fit = MinimapFit::new(rect, map_rect, viewport);
@@ -595,6 +615,7 @@ fn minimap(ui: &Ui, canvas: Rect, map: &MindMap, layout: &Layout, view: &mut Can
     if response.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
+    response.clicked() || response.drag_started()
 }
 
 /// The root's four "+" buttons, drawn just outside its card: the fast way to add a branch on a

@@ -761,6 +761,36 @@ impl LocalApp {
         self.close.is_confirming()
     }
 
+    /// The updater of a test. What it guarantees: no pin file of this machine is read (the path
+    /// points nowhere), so the prompt opens exactly when the test offers a release, and nothing
+    /// touches the network (`offer` opens the prompt directly). What it does not: `Updater::new`
+    /// runs again here, as it already ran in `for_test` before the swap, and on Linux it asks
+    /// `desktop_register` to register the app; that is not this helper's doing. It stays harmless
+    /// because `desktop_register` refuses an executable under a `target` directory, where the test
+    /// binary is; `CRAFT_NO_DESKTOP_INTEGRATION` was not used, as a process-wide variable would be
+    /// raced on by parallel tests.
+    #[cfg(test)]
+    pub(crate) fn updater_hermetic(&mut self) {
+        let nowhere = std::env::temp_dir().join("localmindmap-test-pins-that-do-not-exist/pins.toml");
+        self.updater = Updater::new(&APP, env!("CARGO_PKG_VERSION")).with_pins_path(nowhere);
+    }
+
+    /// Opens the update prompt, as the check at start does when it finds a release.
+    #[cfg(test)]
+    pub(crate) fn offer_update_for_test(&mut self) {
+        self.updater.offer(craft_update::Release {
+            tag: "v9.9.9".into(),
+            name: "Local Mindmap v9.9.9".into(),
+            html_url: "https://example.invalid/9.9.9".into(),
+            ..Default::default()
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn update_prompt_open(&self) -> bool {
+        self.updater.prompt_open()
+    }
+
     #[cfg(test)]
     pub(crate) fn settings_or_about_open(&self) -> bool {
         self.settings_open || self.about_open
@@ -793,10 +823,12 @@ impl LocalApp {
             }
         }
 
-        // The palette, the Settings and About windows and the unsaved-changes prompt are drawn
-        // after the map (below): while one is open, the map must not take a key (they open with
-        // nothing focused, which the map cannot see), so the map is told before it is drawn.
-        self.editor.keys_suspended = self.palette.is_open() || self.settings_open || self.about_open || self.close.is_confirming();
+        // The palette, the Settings and About windows, the unsaved-changes prompt and the update
+        // prompt are drawn after the map (below): while one is open, the map must not take a key
+        // (they open with nothing focused, which the map cannot see), so the map is told before
+        // it is drawn.
+        self.editor.keys_suspended =
+            self.palette.is_open() || self.settings_open || self.about_open || self.close.is_confirming() || self.updater.prompt_open();
         egui::CentralPanel::default_margins().show(ui, |ui| self.page(ui));
 
         if self.about_open {
