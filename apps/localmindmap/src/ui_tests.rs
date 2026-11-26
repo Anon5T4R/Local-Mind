@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use localmindmap_layout::{layout_tree, node_size};
 use localmindmap_model::{MindMap, Side};
 
@@ -888,6 +888,55 @@ fn backspace_in_the_chat_composer_does_not_delete_the_selected_card() {
     let field = harness.get_by_role(egui::accesskit::Role::MultilineTextInput);
     assert_eq!(field.value().as_deref(), Some("uma pergunt"), "Backspace erased one character of the question");
     assert_eq!(harness.state().doc.map.nodes.len(), before, "Backspace in the composer deleted a card");
+}
+
+/// Tab (and Shift+Tab) typed in the composer moves the keyboard out of the field, but is not the
+/// map's Tab: no card is created and no text field opens. The keyboard then belongs to the map
+/// again: the next key acts on it.
+#[test]
+fn tab_in_the_chat_composer_does_not_create_a_card() {
+    for (tab, modifiers) in [("Tab", egui::Modifiers::NONE), ("Shift+Tab", egui::Modifiers::SHIFT)] {
+        let mut harness = harness();
+        chat_with_a_typed_question(&mut harness);
+        let before = harness.state().doc.map.nodes.len();
+
+        key(&mut harness, egui::Key::Tab, modifiers);
+        harness.run_steps(2);
+
+        assert_eq!(harness.state().doc.map.nodes.len(), before, "{tab} in the composer created a card");
+        assert!(harness.state().editing.is_none(), "{tab} in the composer opened a text field");
+        assert!(!harness.ctx.text_edit_focused(), "{tab} leaves the composer (egui's own Tab)");
+        // No tab character went in: egui keeps Tab for the focus (`EventFilter { tab: false }`).
+        assert_eq!(
+            harness.get_by_role(egui::accesskit::Role::MultilineTextInput).value().as_deref(),
+            Some("uma pergunta"),
+            "{tab} typed a tab into the question"
+        );
+        // Where the focus went: to the panel's buttons (none is a text field).
+        let focused = harness.root().query_by(|n| n.is_focused()).map(|n| n.accesskit_node().role());
+        assert_eq!(focused, Some(egui::accesskit::Role::Button), "{tab} moved the focus to a button of the panel");
+
+        // The map is not left mute: with the keyboard back on it, Backspace deletes the selected card.
+        key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+        assert_eq!(harness.state().doc.map.nodes.len(), before - 1, "after {tab} in the composer, the map did not take the next key");
+        assert!(harness.state().doc.map.node("l4ct4t03").is_none(), "the selected card is the one Backspace deleted");
+    }
+}
+
+/// The map's Tab still creates a child with the chat open, once the keyboard is back on the map.
+#[test]
+fn tab_on_the_map_still_creates_a_child_with_the_chat_open() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    click_card(&mut harness, "l4ct4t03");
+    assert!(!harness.ctx.text_edit_focused(), "the click on the card took the keyboard back");
+    let before = harness.state().doc.map.nodes.len();
+
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+
+    let created = harness.state().editing.as_ref().map(|e| e.node.clone()).expect("Tab on the map opens a new child for typing");
+    assert_eq!(harness.state().doc.map.nodes.len(), before + 1);
+    assert_eq!(harness.state().doc.map.node(&created).and_then(|n| n.parent_id.clone()).as_deref(), Some("l4ct4t03"));
 }
 
 /// The map's Ctrl+Enter still expands once the keyboard is back on the map (a click on a card).

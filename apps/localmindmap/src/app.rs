@@ -729,6 +729,11 @@ impl LocalApp {
     }
 
     #[cfg(test)]
+    pub(crate) fn palette_open(&self) -> bool {
+        self.palette.is_open()
+    }
+
+    #[cfg(test)]
     pub(crate) fn editor_mut(&mut self) -> &mut Editor {
         &mut self.editor
     }
@@ -755,6 +760,9 @@ impl LocalApp {
             }
         }
 
+        // The palette is drawn after the map (below): while it is open, the map must not take a
+        // key the palette's box let go (Tab), so it is told before the map is drawn.
+        self.editor.keys_suspended = self.palette.is_open();
         egui::CentralPanel::default_margins().show(ui, |ui| self.page(ui));
 
         if self.about_open {

@@ -70,6 +70,11 @@ pub struct Editor {
     history: History,
     /// A width drag is in progress: its undo step was already recorded.
     resizing: bool,
+    /// A text field had the keyboard when this frame's map area started being drawn.
+    field_had_keyboard: bool,
+    /// Something drawn over the map has the keyboard (the window's command palette): the map's
+    /// own keys stay off until the window clears it. Set by the window every frame, before `ui`.
+    pub keys_suspended: bool,
 }
 
 /// The inline text field over a card.
@@ -122,6 +127,8 @@ impl Editor {
             rect: Rect::NOTHING,
             history: History::default(),
             resizing: false,
+            field_had_keyboard: false,
+            keys_suspended: false,
         }
     }
 
@@ -451,6 +458,9 @@ impl Editor {
 
     /// The map area: canvas, inline field, keyboard, card menu, note window, and the AI surface.
     pub fn ui(&mut self, ui: &mut Ui) {
+        // Read before any widget runs: Tab, Enter or a click can take the focus out of a field
+        // during this frame, and the key that did it is still the field's (see `field_owns_keyboard`).
+        self.field_had_keyboard = ui.ctx().text_edit_focused();
         // The chat takes width from the map area, so it goes first.
         crate::ai::chat_panel(ui, self);
         // The AI error banner and the in-flight status go before the canvas: the canvas takes all
@@ -474,8 +484,8 @@ impl Editor {
         self.move_to_window(ui.ctx());
         self.help_window(ui.ctx());
         // The AI polls its worker, then draws its strip and dialogs over the map. This stays after
-        // `keyboard()`: the Connections fields give the focus up on Enter, and running later, the
-        // Enter of that frame still meets the guard. Don't invert.
+        // `keyboard()`: the Connections fields give the focus up on Enter while handling it, and
+        // running after the map, that Enter never reaches `keyboard()` in the frame it was typed.
         self.ai_tick();
         self.ai_tick_models();
         crate::ai::ui(ui, self);
@@ -609,17 +619,26 @@ impl Editor {
         true
     }
 
+    /// Whether a text field owns the keyboard this frame: it has the focus now, or had it when
+    /// the frame started. The second half is for the key that takes the focus out of the field
+    /// (Tab in the chat composer, Enter in a single-line field): egui moves the focus while the
+    /// field handles the key, and the map, drawn after, must not take that same key as its own.
+    pub(crate) fn field_owns_keyboard(&self, ctx: &Context) -> bool {
+        ctx.text_edit_focused() || self.field_had_keyboard
+    }
+
     /// The keyboard, when no field, menu or window owns it.
     fn keyboard(&mut self, ctx: &Context) {
         if self.editing.is_some() || self.menu.is_some() || self.note.is_some() {
             return;
         }
-        // A text field has the keyboard (the chat composer, the palette): a key typed there is
-        // the field's. The whole map family stays off, not only Ctrl+Enter: Backspace/Delete
-        // would delete the selected card, Enter would create a sibling, the arrows and Tab move.
-        // the field's. The whole map family stays off, not only Ctrl+Enter: Backspace/Delete
-        // would delete the selected card, Enter would create a sibling, the arrows and Tab move.
-        if ctx.text_edit_focused() {
+        // A text field has the keyboard (the chat composer, the palette, the Connections fields).
+        // The whole map family stays off, not only Ctrl+Enter: Backspace/Delete would delete the
+        // selected card, Enter would create a sibling, Tab a child, and the arrows, undo and
+        // Ctrl+Enter would all act on the map. With the field's own key covered (Tab takes the
+        // focus out of it mid-frame), the palette over the map suspends the keys outright: it is
+        // drawn after the map, so its box having the focus is not something this frame can see.
+        if self.keys_suspended || self.field_owns_keyboard(ctx) {
             return;
         }
         let command = modifiers_of(ctx, |m| m.command);

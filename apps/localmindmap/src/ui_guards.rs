@@ -109,6 +109,100 @@ fn assert_bar_buttons(harness: &Harness<'_, LocalApp>, size: egui::Vec2, what: &
     assert!(rects.iter().all(|r| r.max.x <= size.x), "{what}: botão da barra fora da janela: {rects:?}");
 }
 
+/// The keys and clicks of `ui_tests`, for the window as a whole.
+fn key(harness: &mut Harness<'_, LocalApp>, key: egui::Key, modifiers: egui::Modifiers) {
+    for pressed in [true, false] {
+        harness.event(egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers });
+    }
+    harness.run_steps(2);
+}
+
+fn type_text(harness: &mut Harness<'_, LocalApp>, text: &str) {
+    harness.event(egui::Event::Text(text.to_owned()));
+    harness.run_steps(2);
+}
+
+/// Clicks the card of the node whose text is `text`.
+fn click_card(harness: &mut Harness<'_, LocalApp>, text: &str) {
+    let pos = {
+        let editor = &harness.state().editor;
+        let node = editor.doc.map.nodes.iter().find(|n| n.text == text).expect("the node exists");
+        let layout = localmindmap_layout::layout_tree(&editor.doc.map.nodes);
+        let at = *layout.positions.get(&node.id).expect("the node is placed");
+        let size = localmindmap_layout::node_size(node);
+        crate::canvas::card_rect(&editor.view, editor.rect, at, (size.w, size.h)).center()
+    };
+    harness.event(egui::Event::PointerMoved(pos));
+    harness.run_steps(1);
+    for pressed in [true, false] {
+        harness.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::default() });
+    }
+    harness.run_steps(2);
+}
+
+/// Opens the chat and types in its composer.
+fn chat_with_text(harness: &mut Harness<'_, LocalApp>, text: &str) {
+    harness.state_mut().editor_mut().ai.chat_open = true;
+    harness.run_steps(3);
+    harness.get_by_role(Role::MultilineTextInput).click();
+    harness.run_steps(2);
+    type_text(harness, text);
+    assert!(harness.ctx.text_edit_focused(), "the composer has the keyboard");
+}
+
+/// Ctrl+Z and Ctrl+Y typed in the chat composer never undo or redo the map.
+#[test]
+fn undo_keys_in_the_chat_composer_leave_the_map_alone() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    // One edit to undo: a card deleted from the map.
+    click_card(&mut harness, "qSOFA");
+    key(&mut harness, egui::Key::Delete, egui::Modifiers::NONE);
+    let after_delete = harness.state().editor.doc.map.nodes.len();
+    assert!(harness.state().editor.can_undo(), "the deletion is an undo step");
+
+    chat_with_text(&mut harness, "uma pergunta");
+    key(&mut harness, egui::Key::Z, egui::Modifiers::COMMAND);
+    let composer = harness.get_by_role(Role::MultilineTextInput).value();
+    assert_ne!(composer.as_deref(), Some("uma pergunta"), "Ctrl+Z is the composer's own undo: it takes back what was typed (composer: {composer:?})");
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), after_delete, "Ctrl+Z in the composer undid the map (composer: {composer:?})");
+    assert!(harness.state().editor.can_undo(), "the map's undo step is still there");
+
+    key(&mut harness, egui::Key::Y, egui::Modifiers::COMMAND);
+    assert!(harness.state().editor.can_undo(), "Ctrl+Y in the composer redid the map");
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), after_delete, "Ctrl+Y in the composer changed the map");
+}
+
+/// With the command palette open, the map takes no key: the palette is drawn after the map, so
+/// a Tab that takes the focus out of its box must not hand the next key to the map behind it.
+#[test]
+fn the_map_takes_no_key_while_the_palette_is_open() {
+    let mut harness = harness(app(craft_window::Frame::Desktop, "pt-br", ThemeMode::Light), MEDIUM);
+    harness.run_steps(3);
+    click_card(&mut harness, "qSOFA");
+    let before = harness.state().editor.doc.map.nodes.len();
+    harness.state_mut().show_for_test(Shell::Palette);
+    harness.run_steps(2);
+    assert!(harness.state().palette_open());
+    assert!(harness.ctx.text_edit_focused(), "the palette focuses its box when it opens");
+
+    key(&mut harness, egui::Key::Tab, egui::Modifiers::NONE);
+    assert!(!harness.ctx.text_edit_focused(), "Tab took the focus out of the palette's box");
+    assert!(harness.state().palette_open(), "the palette is still open");
+
+    key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+
+    assert!(harness.state().palette_open(), "the palette is still open");
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), before, "Backspace deleted a card behind the palette");
+    assert!(harness.state().editor.editing.is_none(), "a key opened a text field behind the palette");
+
+    // Esc still closes the palette (it is the palette's own key), and the map has its keys back.
+    key(&mut harness, egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(!harness.state().palette_open(), "Esc closes the palette");
+    key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+    assert_eq!(harness.state().editor.doc.map.nodes.len(), before - 1, "with the palette closed, Backspace deletes the selected card");
+}
+
 /// The shell's own windows and the palette, over the open map.
 #[test]
 fn the_shell_windows_fit_the_narrow_window() {
