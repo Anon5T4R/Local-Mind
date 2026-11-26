@@ -31,6 +31,8 @@ mod theme;
 #[cfg(test)]
 mod ui_guards;
 #[cfg(test)]
+mod ui_pointer_tests;
+#[cfg(test)]
 mod ui_tests;
 
 use app::LocalApp;
