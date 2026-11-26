@@ -473,7 +473,9 @@ impl Editor {
         self.note_window(ui.ctx());
         self.move_to_window(ui.ctx());
         self.help_window(ui.ctx());
-        // The AI polls its worker, then draws its strip and dialogs over the map.
+        // The AI polls its worker, then draws its strip and dialogs over the map. This stays after
+        // `keyboard()`: the Connections fields give the focus up on Enter, and running later, the
+        // Enter of that frame still meets the guard. Don't invert.
         self.ai_tick();
         self.ai_tick_models();
         crate::ai::ui(ui, self);
@@ -610,6 +612,14 @@ impl Editor {
     /// The keyboard, when no field, menu or window owns it.
     fn keyboard(&mut self, ctx: &Context) {
         if self.editing.is_some() || self.menu.is_some() || self.note.is_some() {
+            return;
+        }
+        // A text field has the keyboard (the chat composer, the palette): a key typed there is
+        // the field's. The whole map family stays off, not only Ctrl+Enter: Backspace/Delete
+        // would delete the selected card, Enter would create a sibling, the arrows and Tab move.
+        // the field's. The whole map family stays off, not only Ctrl+Enter: Backspace/Delete
+        // would delete the selected card, Enter would create a sibling, the arrows and Tab move.
+        if ctx.text_edit_focused() {
             return;
         }
         let command = modifiers_of(ctx, |m| m.command);

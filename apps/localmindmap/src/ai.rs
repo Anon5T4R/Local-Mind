@@ -155,6 +155,12 @@ impl Ai {
         self.running.is_some()
     }
 
+    /// The turns the chat roll shows (the tests watch the send).
+    #[cfg(test)]
+    pub fn chat_turns(&self) -> Vec<(ai_ui::Role, String)> {
+        self.panel.lines().iter().map(|line| (line.role, line.text.clone())).collect()
+    }
+
     /// The answer so far, for the strip.
     pub fn partial(&self) -> &str {
         self.running.as_ref().map(|running| running.partial.as_str()).unwrap_or("")

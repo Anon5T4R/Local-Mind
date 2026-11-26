@@ -836,3 +836,72 @@ fn no_connection_says_how_to_add_one() {
     let error = harness.state().ai.error.clone().unwrap_or_default();
     assert!(error.contains("Connections"), "{error}");
 }
+
+/// Opens the chat, focuses its composer and types a question (no connection: the map's own AI
+/// actions would leave their error in the strip).
+fn chat_with_a_typed_question(harness: &mut Harness<'_, Editor>) {
+    harness.run_steps(3);
+    click_card(harness, "l4ct4t03");
+    harness.get_by_label("AI").click();
+    harness.run_steps(2);
+    harness.get_by_label("Chat").click();
+    harness.run_steps(2);
+    let field = harness.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    field.click();
+    harness.run_steps(2);
+    text(harness, "uma pergunta");
+    assert!(harness.ctx.text_edit_focused(), "the composer has the keyboard");
+}
+
+/// With the composer focused, Ctrl+Enter is the composer's: the question goes out and the map's
+/// own Ctrl+Enter ("Expand" the selected card) doesn't run under it.
+///
+/// The harness has no AI connection on purpose: that is what makes "Expand" observable (its error
+/// lands in `ai.error`). With a connection the chat's `busy()` swallows the expand, and this test
+/// would pass without the guard.
+#[test]
+fn ctrl_enter_in_the_chat_composer_does_not_also_run_the_map_shortcut() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    assert_eq!(harness.state().selected.as_deref(), Some("l4ct4t03"), "a card is selected");
+
+    key(&mut harness, egui::Key::Enter, egui::Modifiers::COMMAND);
+    harness.run_steps(2);
+
+    let turns = harness.state().ai.chat_turns();
+    assert_eq!(turns.iter().map(|(_, text)| text.as_str()).collect::<Vec<_>>(), ["uma pergunta"], "the composer sends with Ctrl+Enter");
+    assert!(harness.state().ai.error.is_none(), "the map's Expand ran under the chat: {:?}", harness.state().ai.error);
+}
+
+/// Backspace typed in the composer erases a character of the question, never the selected card:
+/// with the keyboard in a field, the whole map family (Ctrl+Enter, Backspace/Delete, Enter, the
+/// arrows, Tab) stays off.
+#[test]
+fn backspace_in_the_chat_composer_does_not_delete_the_selected_card() {
+    let mut harness = harness();
+    chat_with_a_typed_question(&mut harness);
+    let before = harness.state().doc.map.nodes.len();
+
+    key(&mut harness, egui::Key::Backspace, egui::Modifiers::NONE);
+    harness.run_steps(2);
+
+    let field = harness.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    assert_eq!(field.value().as_deref(), Some("uma pergunt"), "Backspace erased one character of the question");
+    assert_eq!(harness.state().doc.map.nodes.len(), before, "Backspace in the composer deleted a card");
+}
+
+/// The map's Ctrl+Enter still expands once the keyboard is back on the map (a click on a card).
+#[test]
+fn ctrl_enter_on_the_map_still_runs_with_the_chat_open() {
+    let mut harness = harness_with(ai_editor(Ok(r#"{"items":["Primeiro","Segundo"]}"#)));
+    chat_with_a_typed_question(&mut harness);
+    click_card(&mut harness, "l4ct4t03");
+    assert!(!harness.ctx.text_edit_focused(), "the click on the card took the keyboard back");
+
+    key(&mut harness, egui::Key::Enter, egui::Modifiers::COMMAND);
+    wait_for(&mut harness, |editor| editor.doc.map.children("l4ct4t03").len() == 2);
+
+    let children: Vec<&str> = harness.state().doc.map.children("l4ct4t03").iter().map(|n| n.text.as_str()).collect();
+    assert_eq!(children, ["Primeiro", "Segundo"]);
+    assert!(harness.state().ai.chat_turns().is_empty(), "the composer's text was not sent");
+}
